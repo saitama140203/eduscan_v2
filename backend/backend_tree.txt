@@ -1,0 +1,82 @@
+.
+├── Dockerfile
+├── README.md
+├── README_auth.md
+├── README_database.md
+├── README_database_migration.md
+├── alembic
+│   ├── __pycache__
+│   │   └── env.cpython-312.pyc
+│   ├── env.py
+│   ├── script.py.mako
+│   └── versions
+│       ├── __pycache__
+│       └── ff60d5c04b9b_create_eduscan_tables.py
+├── alembic.ini
+├── app
+│   ├── __init__.py
+│   ├── __pycache__
+│   │   ├── __init__.cpython-312.pyc
+│   │   └── main.cpython-312.pyc
+│   ├── core
+│   │   ├── __init__.py
+│   │   ├── __pycache__
+│   │   ├── config.py
+│   │   ├── deps.py
+│   │   └── security.py
+│   ├── db
+│   │   ├── __init__.py
+│   │   ├── __pycache__
+│   │   ├── database.py
+│   │   ├── seed.py
+│   │   └── session.py
+│   ├── main.py
+│   ├── middlewares
+│   ├── models
+│   │   ├── __init__.py
+│   │   ├── __pycache__
+│   │   ├── answer_sheet_template.py
+│   │   ├── class_room.py
+│   │   ├── exam.py
+│   │   ├── file.py
+│   │   ├── organization.py
+│   │   ├── setting.py
+│   │   ├── student.py
+│   │   └── user.py
+│   ├── routes
+│   │   ├── __init__.py
+│   │   ├── __pycache__
+│   │   ├── auth.py
+│   │   ├── classes.py
+│   │   ├── organizations.py
+│   │   ├── students.py
+│   │   └── users.py
+│   ├── schemas
+│   │   ├── __init__.py
+│   │   ├── __pycache__
+│   │   ├── class_student.py
+│   │   ├── organization.py
+│   │   ├── token.py
+│   │   └── user.py
+│   ├── services
+│   │   ├── __init__.py
+│   │   ├── __pycache__
+│   │   ├── class_service.py
+│   │   ├── organization_service.py
+│   │   ├── student_service.py
+│   │   └── user_service.py
+│   ├── tests
+│   │   ├── __init__.py
+│   │   └── test_auth.py
+│   ├── uploads
+│   └── utils
+│       ├── __init__.py
+│       ├── __pycache__
+│       └── auth.py
+├── backend_tree.txt
+├── drop_alembic_version.py
+├── entrypoint.sh
+├── requirements.txt
+└── uploads
+
+25 directories, 55 files
