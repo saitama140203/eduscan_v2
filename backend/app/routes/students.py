@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import List, Optional
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.session import get_db
+from app.db.database import get_db
 from app.services.student_service import StudentService
 from app.services.class_service import ClassService
 from app.schemas.class_student import StudentOut, StudentCreate, StudentUpdate, StudentBatchCreate, StudentTransfer
@@ -28,34 +28,34 @@ async def read_students_by_class(
     search: Optional[str] = None,
     skip: int = 0,
     limit: int = 100,
-    db: Session = Depends(get_db),
-    # Kiểm tra quyền truy cập lớp học
-    db_class = Depends(check_class_access)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
 ):
     """Lấy danh sách học sinh theo lớp học"""
-    # Quyền truy cập đã được kiểm tra qua middleware check_class_access
+    # Kiểm tra quyền truy cập lớp học
+    db_class = await check_class_access(class_id, current_user, db)
     
     # Lấy danh sách học sinh
-    students = StudentService.get_students_by_class(db, class_id, skip=skip, limit=limit, search=search)
+    students = await StudentService.get_students_by_class(db, class_id, skip=skip, limit=limit, search=search)
     return students
 
 @router.post("/", response_model=StudentOut, status_code=status.HTTP_201_CREATED)
 async def create_student(
     student_create: StudentCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
     """Tạo học sinh mới"""
     # Kiểm tra quyền truy cập lớp học
-    db_class = check_class_access(student_create.maLopHoc, db, current_user)
+    db_class = await check_class_access(student_create.maLopHoc, current_user, db)
     
     # Tạo học sinh mới
-    return StudentService.create_student(db, student_create)
+    return await StudentService.create_student(db, student_create)
 
 @router.post("/batch", response_model=List[StudentOut], status_code=status.HTTP_201_CREATED)
 async def create_students_batch(
     student_batch: StudentBatchCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
     """Tạo nhiều học sinh cùng lúc"""
@@ -70,20 +70,20 @@ async def create_students_batch(
     
     for class_id in class_ids:
         # Kiểm tra quyền truy cập từng lớp học
-        check_class_access(class_id, db, current_user)
+        await check_class_access(class_id, current_user, db)
     
     # Tạo học sinh mới
-    return StudentService.create_students_batch(db, student_batch)
+    return await StudentService.create_students_batch(db, student_batch)
 
 @router.get("/{student_id}", response_model=StudentOut)
 async def read_student(
     student_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
     """Lấy thông tin học sinh cụ thể"""
     # Lấy thông tin học sinh
-    db_student = StudentService.get_student_by_id(db, student_id)
+    db_student = await StudentService.get_student_by_id(db, student_id)
     if not db_student:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -91,7 +91,7 @@ async def read_student(
         )
     
     # Kiểm tra quyền truy cập lớp học của học sinh
-    check_class_access(db_student.maLopHoc, db, current_user)
+    await check_class_access(db_student.maLopHoc, current_user, db)
     
     return db_student
 
@@ -99,12 +99,12 @@ async def read_student(
 async def update_student(
     student_id: int,
     student_update: StudentUpdate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
     """Cập nhật thông tin học sinh"""
     # Lấy thông tin học sinh
-    db_student = StudentService.get_student_by_id(db, student_id)
+    db_student = await StudentService.get_student_by_id(db, student_id)
     if not db_student:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -112,19 +112,19 @@ async def update_student(
         )
     
     # Kiểm tra quyền truy cập lớp học của học sinh
-    check_class_access(db_student.maLopHoc, db, current_user)
+    await check_class_access(db_student.maLopHoc, current_user, db)
     
-    return StudentService.update_student(db, student_id, student_update)
+    return await StudentService.update_student(db, student_id, student_update)
 
 @router.delete("/{student_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_student(
     student_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
     """Xóa học sinh"""
     # Lấy thông tin học sinh
-    db_student = StudentService.get_student_by_id(db, student_id)
+    db_student = await StudentService.get_student_by_id(db, student_id)
     if not db_student:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -132,23 +132,23 @@ async def delete_student(
         )
     
     # Kiểm tra quyền truy cập lớp học của học sinh
-    check_class_access(db_student.maLopHoc, db, current_user)
+    await check_class_access(db_student.maLopHoc, current_user, db)
     
     # Xóa học sinh
-    StudentService.delete_student(db, student_id)
+    await StudentService.delete_student(db, student_id)
     return {"message": "Học sinh đã được xóa thành công"}
 
 @router.post("/transfer", response_model=List[StudentOut])
 async def transfer_students(
     transfer_data: StudentTransfer,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
     """Chuyển học sinh sang lớp khác"""
     # Lấy danh sách học sinh
     students = []
     for student_id in transfer_data.maHocSinhList:
-        db_student = StudentService.get_student_by_id(db, student_id)
+        db_student = await StudentService.get_student_by_id(db, student_id)
         if not db_student:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -162,7 +162,7 @@ async def transfer_students(
     # Manager chỉ có thể chuyển trong cùng tổ chức
     elif current_user.vaiTro == "MANAGER":
         # Kiểm tra lớp đích thuộc tổ chức của manager
-        db_target_class = ClassService.get_class_by_id(db, transfer_data.maLopHocMoi)
+        db_target_class = await ClassService.get_class_detail(db, transfer_data.maLopHocMoi)
         if not db_target_class:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -177,7 +177,7 @@ async def transfer_students(
             
         # Kiểm tra học sinh thuộc tổ chức của manager
         for student in students:
-            db_student_class = ClassService.get_class_by_id(db, student.maLopHoc)
+            db_student_class = await ClassService.get_class_detail(db, student.maLopHoc)
             if db_student_class.maToChuc != current_user.maToChuc:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
@@ -192,4 +192,4 @@ async def transfer_students(
         )
     
     # Thực hiện chuyển lớp
-    return StudentService.transfer_students(db, transfer_data) 
+    return await StudentService.transfer_students(db, transfer_data) 

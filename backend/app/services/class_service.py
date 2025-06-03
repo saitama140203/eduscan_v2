@@ -1,184 +1,163 @@
-from sqlalchemy.orm import Session
-from sqlalchemy import func
-from fastapi import HTTPException, status
-from typing import Optional, List, Dict, Any
-from datetime import datetime
-
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
+from sqlalchemy.orm import joinedload
 from app.models.class_room import ClassRoom
-from app.models.student import Student
 from app.models.user import User
+from app.models.student import Student
 from app.models.organization import Organization
-from app.schemas.class_student import ClassCreate, ClassUpdate, ClassDetail
+from app.schemas.class_student import ClassCreate, ClassUpdate, ClassOut, ClassDetail
+from fastapi import HTTPException, status
 
 class ClassService:
     @staticmethod
-    def create_class(db: Session, class_create: ClassCreate) -> ClassRoom:
-        # Kiểm tra tổ chức tồn tại
-        db_org = db.query(Organization).filter(Organization.maToChuc == class_create.maToChuc).first()
-        if not db_org:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Không tìm thấy tổ chức với ID: {class_create.maToChuc}"
+    async def get_list(
+        db: AsyncSession, 
+        maToChuc: int = None, 
+        maGiaoVien: int = None, 
+        search: str = None, 
+        skip: int = 0, 
+        limit: int = 100
+    ):
+        # Subquery để count students cho mỗi class
+        student_count_subq = (
+            select(
+                Student.maLopHoc, 
+                func.count(Student.maHocSinh).label('total_students')
             )
-        
-        # Kiểm tra giáo viên chủ nhiệm nếu có
-        if class_create.maGiaoVienChuNhiem:
-            db_teacher = db.query(User).filter(
-                User.maNguoiDung == class_create.maGiaoVienChuNhiem,
-                User.vaiTro == "Teacher"
-            ).first()
-            
-            if not db_teacher:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Không tìm thấy giáo viên với ID: {class_create.maGiaoVienChuNhiem}"
-                )
-        
-        # Tạo lớp học mới
-        db_class = ClassRoom(
-            maToChuc=class_create.maToChuc,
-            tenLop=class_create.tenLop,
-            capHoc=class_create.capHoc,
-            namHoc=class_create.namHoc,
-            maGiaoVienChuNhiem=class_create.maGiaoVienChuNhiem,
-            moTa=class_create.moTa,
-            trangThai=True
+            .where(Student.trangThai == True)
+            .group_by(Student.maLopHoc)
+            .subquery()
         )
         
-        # Thêm vào DB và commit
-        db.add(db_class)
-        db.commit()
-        db.refresh(db_class)
+        # Main query với left join để có cả classes không có students
+        stmt = (
+            select(
+                ClassRoom,
+                func.coalesce(student_count_subq.c.total_students, 0).label('total_students')
+            )
+            .outerjoin(student_count_subq, ClassRoom.maLopHoc == student_count_subq.c.maLopHoc)
+            .where(ClassRoom.trangThai == True)
+        )
         
-        return db_class
-    
-    @staticmethod
-    def get_class_by_id(db: Session, class_id: int) -> Optional[ClassRoom]:
-        return db.query(ClassRoom).filter(ClassRoom.maLopHoc == class_id).first()
-    
-    @staticmethod
-    def get_class_detail(db: Session, class_id: int) -> Optional[Dict[str, Any]]:
-        db_class = ClassService.get_class_by_id(db, class_id)
-        
-        if not db_class:
-            return None
+        if maToChuc:
+            stmt = stmt.where(ClassRoom.maToChuc == maToChuc)
+        if maGiaoVien:
+            stmt = stmt.where(ClassRoom.maGiaoVienChuNhiem == maGiaoVien)
+        if search:
+            stmt = stmt.where(ClassRoom.tenLop.ilike(f"%{search}%"))
             
-        # Đếm số học sinh trong lớp
-        student_count = db.query(func.count(Student.maHocSinh))\
-            .filter(Student.maLopHoc == class_id, Student.trangThai == True)\
-            .scalar()
-        
-        # Lấy thông tin tên giáo viên chủ nhiệm
-        if db_class.maGiaoVienChuNhiem:
-            teacher = db.query(User).filter(User.maNguoiDung == db_class.maGiaoVienChuNhiem).first()
-            if teacher:
-                setattr(db_class, "tenGiaoVienChuNhiem", teacher.hoTen)
-            else:
-                setattr(db_class, "tenGiaoVienChuNhiem", None)
-        else:
-            setattr(db_class, "tenGiaoVienChuNhiem", None)
+        stmt = stmt.offset(skip).limit(limit)
+        stmt = stmt.options(
+            joinedload(ClassRoom.giaoVienChuNhiem),
+            joinedload(ClassRoom.toChuc)
+        )
+
+        result = await db.execute(stmt)
+        rows = result.all()
+
+        out_list = []
+        for row in rows:
+            class_obj = row[0]  # ClassRoom object
+            total_students = row[1]  # student count
             
-        class_detail = ClassDetail.from_orm(db_class)
-        class_detail.total_students = student_count
-        
-        return class_detail
-    
+            tenGiaoVien = class_obj.giaoVienChuNhiem.hoTen if class_obj.giaoVienChuNhiem else None
+            tenToChuc = class_obj.toChuc.tenToChuc if class_obj.toChuc else None
+            
+            out = ClassOut(
+                **class_obj.__dict__,
+                tenGiaoVienChuNhiem=tenGiaoVien,
+                tenToChuc=tenToChuc,
+                total_students=total_students
+            )
+            out_list.append(out)
+        return out_list
+
     @staticmethod
-    def get_classes(db: Session, org_id: Optional[int] = None, teacher_id: Optional[int] = None, 
-                   skip: int = 0, limit: int = 100) -> List[ClassRoom]:
-        query = db.query(ClassRoom)
+    async def get_class_detail(db: AsyncSession, class_id: int):
+        # Count students for this specific class
+        student_count_stmt = (
+            select(func.count(Student.maHocSinh))
+            .where(Student.maLopHoc == class_id, Student.trangThai == True)
+        )
+        student_count_result = await db.execute(student_count_stmt)
+        total_students = student_count_result.scalar() or 0
         
-        # Lọc theo tổ chức
-        if org_id:
-            query = query.filter(ClassRoom.maToChuc == org_id)
-            
-        # Lọc theo giáo viên chủ nhiệm
-        if teacher_id:
-            query = query.filter(ClassRoom.maGiaoVienChuNhiem == teacher_id)
+        stmt = select(ClassRoom).where(ClassRoom.maLopHoc == class_id)
+        stmt = stmt.options(
+            joinedload(ClassRoom.giaoVienChuNhiem),
+            joinedload(ClassRoom.toChuc)
+        )
+        result = await db.execute(stmt)
+        c = result.scalars().first()
+        if not c:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Lớp học không tồn tại."
+            )
+        tenGiaoVien = c.giaoVienChuNhiem.hoTen if c.giaoVienChuNhiem else None
+        tenToChuc = c.toChuc.tenToChuc if c.toChuc else None
         
-        classes = query.offset(skip).limit(limit).all()
-        
-        # Lấy thông tin tên giáo viên chủ nhiệm và số học sinh
-        for class_item in classes:
-            # Lấy tên giáo viên chủ nhiệm
-            if class_item.maGiaoVienChuNhiem:
-                teacher = db.query(User).filter(User.maNguoiDung == class_item.maGiaoVienChuNhiem).first()
-                if teacher:
-                    setattr(class_item, "tenGiaoVienChuNhiem", teacher.hoTen)
-                else:
-                    setattr(class_item, "tenGiaoVienChuNhiem", None)
-            else:
-                setattr(class_item, "tenGiaoVienChuNhiem", None)
-            
-            # Đếm số học sinh trong lớp
-            student_count = db.query(func.count(Student.maHocSinh))\
-                .filter(Student.maLopHoc == class_item.maLopHoc, Student.trangThai == True)\
-                .scalar()
-            setattr(class_item, "total_students", student_count)
-        
-        return classes
-    
+        out = ClassDetail(
+            **c.__dict__,
+            tenGiaoVienChuNhiem=tenGiaoVien,
+            tenToChuc=tenToChuc,
+            total_students=total_students
+        )
+        return out
+
     @staticmethod
-    def update_class(db: Session, class_id: int, class_update: ClassUpdate) -> ClassRoom:
-        # Tìm lớp học cần cập nhật
-        db_class = ClassService.get_class_by_id(db, class_id)
+    async def create_class(db: AsyncSession, class_create: ClassCreate):
+        stmt = select(ClassRoom).where(
+            ClassRoom.maToChuc == class_create.maToChuc,
+            ClassRoom.tenLop == class_create.tenLop,
+            ClassRoom.namHoc == class_create.namHoc,
+            ClassRoom.trangThai == True
+        )
+        result = await db.execute(stmt)
+        exists = result.scalars().first()
+        if exists:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, 
+                detail="Lớp học đã tồn tại trong tổ chức và năm học này."
+            )
+        new_class = ClassRoom(**class_create.dict())
+        db.add(new_class)
+        await db.commit()
+        await db.refresh(new_class)
+        return new_class
+
+    @staticmethod
+    async def update_class(db: AsyncSession, maLopHoc: int, class_update: ClassUpdate):
+        stmt = select(ClassRoom).where(
+            ClassRoom.maLopHoc == maLopHoc,
+            ClassRoom.trangThai == True
+        )
+        result = await db.execute(stmt)
+        db_class = result.scalars().first()
         if not db_class:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Không tìm thấy lớp học với ID: {class_id}"
+                detail="Lớp học không tồn tại hoặc đã bị khóa."
             )
-        
-        # Kiểm tra giáo viên chủ nhiệm mới nếu có cập nhật
-        if class_update.maGiaoVienChuNhiem and class_update.maGiaoVienChuNhiem != db_class.maGiaoVienChuNhiem:
-            db_teacher = db.query(User).filter(
-                User.maNguoiDung == class_update.maGiaoVienChuNhiem,
-                User.vaiTro == "Teacher"
-            ).first()
-            
-            if not db_teacher:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Không tìm thấy giáo viên với ID: {class_update.maGiaoVienChuNhiem}"
-                )
-        
-        # Cập nhật thông tin
-        update_data = class_update.dict(exclude_unset=True)
-        
-        for key, value in update_data.items():
-            setattr(db_class, key, value)
-        
-        # Cập nhật thời gian
-        db_class.thoiGianCapNhat = datetime.now()
-        
-        # Commit thay đổi
-        db.commit()
-        db.refresh(db_class)
-        
+        for attr, value in class_update.dict(exclude_unset=True).items():
+            setattr(db_class, attr, value)
+        await db.commit()
+        await db.refresh(db_class)
         return db_class
-    
+
     @staticmethod
-    def delete_class(db: Session, class_id: int) -> bool:
-        # Tìm lớp học
-        db_class = ClassService.get_class_by_id(db, class_id)
+    async def delete_class(db: AsyncSession, maLopHoc: int):
+        stmt = select(ClassRoom).where(
+            ClassRoom.maLopHoc == maLopHoc,
+            ClassRoom.trangThai == True
+        )
+        result = await db.execute(stmt)
+        db_class = result.scalars().first()
         if not db_class:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Không tìm thấy lớp học với ID: {class_id}"
+                detail="Lớp học không tồn tại hoặc đã bị khóa."
             )
-        
-        # Kiểm tra xem lớp học có học sinh không
-        student_count = db.query(func.count(Student.maHocSinh))\
-            .filter(Student.maLopHoc == class_id)\
-            .scalar()
-            
-        if student_count > 0:
-            # Nếu có học sinh, chỉ đánh dấu lớp học là không active
-            db_class.trangThai = False
-            db_class.thoiGianCapNhat = datetime.now()
-            db.commit()
-        else:
-            # Nếu không có học sinh, xóa lớp học
-            db.delete(db_class)
-            db.commit()
-        
-        return True 
+        db_class.trangThai = False  # Xóa mềm
+        await db.commit()
+        return db_class

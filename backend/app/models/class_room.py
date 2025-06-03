@@ -1,13 +1,8 @@
 from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, Text, TIMESTAMP, BigInteger, func
 from sqlalchemy.orm import relationship
-
 from app.db.session import Base
 
 class ClassRoom(Base):
-    """
-    Model Lớp học
-    Tương ứng với bảng LOPHOC trong CSDL
-    """
     __tablename__ = "LOPHOC"
     
     maLopHoc = Column(BigInteger, primary_key=True, index=True, autoincrement=True)
@@ -20,10 +15,11 @@ class ClassRoom(Base):
     trangThai = Column(Boolean, nullable=False, default=True)
     thoiGianTao = Column(TIMESTAMP, nullable=False, server_default=func.current_timestamp())
     thoiGianCapNhat = Column(TIMESTAMP, nullable=False, server_default=func.current_timestamp(), onupdate=func.current_timestamp())
-    
+
     # Relationships
     toChuc = relationship("Organization", back_populates="lopHocs")
-    giaoVienChuNhiem = relationship("User", back_populates="lopHocsQuanLy")
+    giaoVienChuNhiem = relationship("User", back_populates="lopHocsQuanLy", foreign_keys=[maGiaoVienChuNhiem])
     hocSinhs = relationship("Student", back_populates="lopHoc", cascade="all, delete-orphan", passive_deletes=True)
     baiKiemTra_lopHocs = relationship("ExamClassRoom", back_populates="lopHoc", cascade="all, delete-orphan", passive_deletes=True)
     thongKeKiemTras = relationship("ExamStatistic", back_populates="lopHoc", cascade="all, delete-orphan", passive_deletes=True)
+    caiDat = relationship("ClassSettings", back_populates="lopHoc", uselist=False, cascade="all, delete-orphan", passive_deletes=True)

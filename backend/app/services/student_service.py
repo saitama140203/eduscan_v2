@@ -1,4 +1,5 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from fastapi import HTTPException, status
 from typing import Optional, List, Dict, Any
@@ -10,12 +11,14 @@ from app.schemas.class_student import StudentCreate, StudentUpdate, StudentBatch
 
 class StudentService:
     @staticmethod
-    def create_student(db: Session, student_create: StudentCreate) -> Student:
+    async def create_student(db: AsyncSession, student_create: StudentCreate) -> Student:
         # Kiểm tra lớp học tồn tại
-        db_class = db.query(ClassRoom).filter(
+        stmt = select(ClassRoom).where(
             ClassRoom.maLopHoc == student_create.maLopHoc,
             ClassRoom.trangThai == True
-        ).first()
+        )
+        result = await db.execute(stmt)
+        db_class = result.scalars().first()
         
         if not db_class:
             raise HTTPException(
@@ -24,10 +27,12 @@ class StudentService:
             )
         
         # Kiểm tra mã học sinh đã tồn tại trong lớp chưa
-        db_student = db.query(Student).filter(
+        stmt = select(Student).where(
             Student.maLopHoc == student_create.maLopHoc,
             Student.maHocSinhTruong == student_create.maHocSinhTruong
-        ).first()
+        )
+        result = await db.execute(stmt)
+        db_student = result.scalars().first()
         
         if db_student:
             raise HTTPException(
@@ -51,10 +56,10 @@ class StudentService:
         db.add(db_student)
         
         try:
-            db.commit()
-            db.refresh(db_student)
+            await db.commit()
+            await db.refresh(db_student)
         except IntegrityError:
-            db.rollback()
+            await db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Mã học sinh {student_create.maHocSinhTruong} đã tồn tại trong lớp này"
@@ -63,17 +68,19 @@ class StudentService:
         return db_student
     
     @staticmethod
-    def create_students_batch(db: Session, student_batch: StudentBatchCreate) -> List[Student]:
+    async def create_students_batch(db: AsyncSession, student_batch: StudentBatchCreate) -> List[Student]:
         """Tạo nhiều học sinh cùng lúc"""
         created_students = []
         
         # Validate lớp học
         class_ids = set(student.maLopHoc for student in student_batch.students)
         for class_id in class_ids:
-            db_class = db.query(ClassRoom).filter(
+            stmt = select(ClassRoom).where(
                 ClassRoom.maLopHoc == class_id,
                 ClassRoom.trangThai == True
-            ).first()
+            )
+            result = await db.execute(stmt)
+            db_class = result.scalars().first()
             
             if not db_class:
                 raise HTTPException(
@@ -97,13 +104,15 @@ class StudentService:
         
         # Check for existing student IDs in database
         for class_id, student_ids in student_ids_by_class.items():
-            existing_students = db.query(Student.maHocSinhTruong).filter(
+            stmt = select(Student.maHocSinhTruong).where(
                 Student.maLopHoc == class_id,
                 Student.maHocSinhTruong.in_(student_ids)
-            ).all()
+            )
+            result = await db.execute(stmt)
+            existing_students = result.scalars().all()
             
             if existing_students:
-                existing_ids = [s.maHocSinhTruong for s in existing_students]
+                existing_ids = list(existing_students)
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Mã học sinh {', '.join(existing_ids)} đã tồn tại trong lớp {class_id}"
@@ -125,11 +134,11 @@ class StudentService:
             created_students.append(db_student)
         
         try:
-            db.commit()
+            await db.commit()
             for student in created_students:
-                db.refresh(student)
+                await db.refresh(student)
         except IntegrityError as e:
-            db.rollback()
+            await db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Lỗi khi thêm học sinh, có thể do mã học sinh trùng lặp: {str(e)}"
@@ -138,36 +147,42 @@ class StudentService:
         return created_students
     
     @staticmethod
-    def get_student_by_id(db: Session, student_id: int) -> Optional[Student]:
-        return db.query(Student).filter(Student.maHocSinh == student_id).first()
+    async def get_student_by_id(db: AsyncSession, student_id: int) -> Optional[Student]:
+        stmt = select(Student).where(Student.maHocSinh == student_id)
+        result = await db.execute(stmt)
+        return result.scalars().first()
     
     @staticmethod
-    def get_student_by_school_id(db: Session, class_id: int, school_id: str) -> Optional[Student]:
-        return db.query(Student).filter(
+    async def get_student_by_school_id(db: AsyncSession, class_id: int, school_id: str) -> Optional[Student]:
+        stmt = select(Student).where(
             Student.maLopHoc == class_id, 
             Student.maHocSinhTruong == school_id
-        ).first()
+        )
+        result = await db.execute(stmt)
+        return result.scalars().first()
     
     @staticmethod
-    def get_students_by_class(db: Session, class_id: int, 
+    async def get_students_by_class(db: AsyncSession, class_id: int, 
                              skip: int = 0, limit: int = 100,
                              search: Optional[str] = None) -> List[Student]:
-        query = db.query(Student).filter(Student.maLopHoc == class_id)
+        stmt = select(Student).where(Student.maLopHoc == class_id)
         
         # Search by name or school ID
         if search:
             search_term = f"%{search}%"
-            query = query.filter(
+            stmt = stmt.where(
                 (Student.hoTen.ilike(search_term)) | 
                 (Student.maHocSinhTruong.ilike(search_term))
             )
             
-        return query.offset(skip).limit(limit).all()
+        stmt = stmt.offset(skip).limit(limit)
+        result = await db.execute(stmt)
+        return result.scalars().all()
     
     @staticmethod
-    def update_student(db: Session, student_id: int, student_update: StudentUpdate) -> Student:
+    async def update_student(db: AsyncSession, student_id: int, student_update: StudentUpdate) -> Student:
         # Tìm học sinh cần cập nhật
-        db_student = StudentService.get_student_by_id(db, student_id)
+        db_student = await StudentService.get_student_by_id(db, student_id)
         if not db_student:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -176,11 +191,13 @@ class StudentService:
         
         # Kiểm tra trùng mã học sinh trong lớp nếu có thay đổi
         if student_update.maHocSinhTruong and student_update.maHocSinhTruong != db_student.maHocSinhTruong:
-            existing = db.query(Student).filter(
+            stmt = select(Student).where(
                 Student.maLopHoc == db_student.maLopHoc,
                 Student.maHocSinhTruong == student_update.maHocSinhTruong,
                 Student.maHocSinh != student_id
-            ).first()
+            )
+            result = await db.execute(stmt)
+            existing = result.scalars().first()
             
             if existing:
                 raise HTTPException(
@@ -198,90 +215,64 @@ class StudentService:
         db_student.thoiGianCapNhat = datetime.now()
         
         try:
-            # Commit thay đổi
-            db.commit()
-            db.refresh(db_student)
+            await db.commit()
+            await db.refresh(db_student)
         except IntegrityError:
-            db.rollback()
+            await db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Lỗi khi cập nhật thông tin học sinh, có thể do mã học sinh đã tồn tại"
+                detail=f"Lỗi khi cập nhật học sinh"
             )
         
         return db_student
     
     @staticmethod
-    def delete_student(db: Session, student_id: int) -> bool:
+    async def delete_student(db: AsyncSession, student_id: int) -> bool:
         # Tìm học sinh
-        db_student = StudentService.get_student_by_id(db, student_id)
+        db_student = await StudentService.get_student_by_id(db, student_id)
         if not db_student:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Không tìm thấy học sinh với ID: {student_id}"
             )
         
-        # Xóa học sinh
-        db.delete(db_student)
-        db.commit()
+        # Xóa mềm - set trangThai = False
+        db_student.trangThai = False
+        db_student.thoiGianCapNhat = datetime.now()
         
+        await db.commit()
         return True
     
     @staticmethod
-    def transfer_students(db: Session, transfer_data: StudentTransfer) -> List[Student]:
+    async def transfer_students(db: AsyncSession, transfer_data: StudentTransfer) -> List[Student]:
         """Chuyển học sinh sang lớp mới"""
-        # Kiểm tra lớp học mới
-        new_class = db.query(ClassRoom).filter(
-            ClassRoom.maLopHoc == transfer_data.maLopHocMoi,
-            ClassRoom.trangThai == True
-        ).first()
-        
-        if not new_class:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Không tìm thấy lớp học mới với ID: {transfer_data.maLopHocMoi} hoặc lớp không hoạt động"
-            )
-        
-        # Lấy danh sách học sinh
-        students = db.query(Student).filter(
-            Student.maHocSinh.in_(transfer_data.maHocSinhList)
-        ).all()
-        
-        if len(students) != len(transfer_data.maHocSinhList):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Một số học sinh không tồn tại trong hệ thống"
-            )
-        
-        # Lấy danh sách mã học sinh của lớp mới
-        existing_student_ids = db.query(Student.maHocSinhTruong).filter(
-            Student.maLopHoc == transfer_data.maLopHocMoi
-        ).all()
-        existing_ids = [s.maHocSinhTruong for s in existing_student_ids]
-        
-        # Chuyển từng học sinh
         transferred_students = []
         
-        for student in students:
-            # Kiểm tra trùng mã học sinh trong lớp mới
-            if student.maHocSinhTruong in existing_ids:
-                # Tạo mã học sinh mới để tránh trùng
-                new_school_id = f"{student.maHocSinhTruong}_T{datetime.now().strftime('%Y%m%d')}"
-                student.maHocSinhTruong = new_school_id
-            
-            # Cập nhật lớp mới
-            student.maLopHoc = transfer_data.maLopHocMoi
-            student.thoiGianCapNhat = datetime.now()
-            transferred_students.append(student)
+        # Kiểm tra lớp đích tồn tại
+        stmt = select(ClassRoom).where(
+            ClassRoom.maLopHoc == transfer_data.maLopHocMoi,
+            ClassRoom.trangThai == True
+        )
+        result = await db.execute(stmt)
+        target_class = result.scalars().first()
         
-        try:
-            db.commit()
-            for student in transferred_students:
-                db.refresh(student)
-        except IntegrityError:
-            db.rollback()
+        if not target_class:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Lỗi khi chuyển lớp cho học sinh, vui lòng thử lại"
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Không tìm thấy lớp học đích với ID: {transfer_data.maLopHocMoi}"
             )
+        
+        # Cập nhật lớp học cho từng học sinh
+        for student_id in transfer_data.maHocSinhList:
+            db_student = await StudentService.get_student_by_id(db, student_id)
+            if db_student:
+                db_student.maLopHoc = transfer_data.maLopHocMoi
+                db_student.thoiGianCapNhat = datetime.now()
+                transferred_students.append(db_student)
+        
+        await db.commit()
+        
+        for student in transferred_students:        
+                await db.refresh(student)
         
         return transferred_students 
