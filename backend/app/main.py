@@ -60,6 +60,7 @@ app.include_router(dashboard.router, prefix=f"{settings.API_PREFIX}/v1")
 app.include_router(settings_router.router, prefix=f"{settings.API_PREFIX}/v1")
 app.include_router(answer_templates.router, prefix=f"{settings.API_PREFIX}/v1")
 
+
 # Root endpoint
 @app.get("/")
 async def root():
