@@ -7,7 +7,6 @@ import uvicorn
 
 from app.core.config import settings
 from app.routes import auth, users, organizations, classes, students, exams, dashboard, settings as settings_router, answer_templates
-
 from app.db.session import Base, engine
 
 # Import tất cả các model để đảm bảo chúng được đăng ký với Base

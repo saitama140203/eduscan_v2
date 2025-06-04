@@ -39,8 +39,5 @@ export const authApi = {
   },
   logout: async () => {
     await apiRequest("/auth/logout", { method: "POST" })
-    if (typeof window !== "undefined") {
-      window.location.href = "/auth/login"
-    }
   },
 }
