@@ -39,8 +39,13 @@ export const authApi = {
   },
   logout: async () => {
     await apiRequest("/auth/logout", { method: "POST" })
-    if (typeof window !== "undefined") {
-      window.location.href = "/auth/login"
-    }
+  },
+  refresh: async () => {
+    const data = await apiRequest(
+      "/auth/refresh",
+      { method: "POST" },
+      { skipAuth: true }
+    )
+    return data
   },
 }

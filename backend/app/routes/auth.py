@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException, status, Request ,Response
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response, Cookie
+import logging
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
@@ -8,6 +9,8 @@ from app.models.user import User
 from app.schemas.token import Token, RefreshToken, PasswordResetRequest, PasswordReset
 from app.schemas.user import UserCreate, UserOut, UserChangePassword
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 from app.core.security import (
     create_access_token, 
     create_refresh_token, 
@@ -64,7 +67,10 @@ async def login(
             detail="Tài khoản đã bị vô hiệu hóa"
         )
     
-    print(f"[LOGIN_ROUTE] About to create access token. Settings SECRET_KEY: {settings.SECRET_KEY}") # Log SECRET_KEY
+    logger.debug(
+        "[LOGIN_ROUTE] About to create access token. Settings SECRET_KEY: %s",
+        settings.SECRET_KEY,
+    )
     # Tạo access token và refresh token
     access_token = create_access_token(
         subject=user.email,
@@ -74,9 +80,7 @@ async def login(
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
     
-    refresh_token = create_refresh_token(
-        subject=user.email
-    )
+    refresh_token = create_refresh_token(subject=user.email)
     response.set_cookie(
         key="access_token",
         value=access_token,
@@ -84,7 +88,14 @@ async def login(
         samesite="lax",  # hoặc "none" với HTTPS, "lax" với localhost là OK
         max_age=60*60*24*7,
         path="/"
-        # domain="localhost"  # Có thể không cần
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        samesite="lax",
+        max_age=60*60*24*7,
+        path="/auth/refresh"
     )
     return {
         "access_token": access_token,
@@ -94,15 +105,27 @@ async def login(
 
 @router.post("/refresh", response_model=Token)
 async def refresh_token(
-    token_data: RefreshToken,
-    db: AsyncSession = Depends(get_db)
+    token_data: RefreshToken | None = None,
+    refresh_token_cookie: str | None = Cookie(None, alias="refresh_token"),
+    db: AsyncSession = Depends(get_db),
+    response: Response,
 ):
     """
     Làm mới access token bằng refresh token
     """
     try:
+        refresh_token_value = (
+            token_data.refresh_token if token_data else refresh_token_cookie
+        )
+        if not refresh_token_value:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Thiếu refresh token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
         # Xác minh refresh token
-        payload = verify_token(token_data.refresh_token, token_type="refresh")
+        payload = verify_token(refresh_token_value, token_type="refresh")
         
         # Lấy email từ refresh token
         email = payload.get("sub")
@@ -139,21 +162,27 @@ async def refresh_token(
         )
         
         # Tạo refresh token mới
-        refresh_token = create_refresh_token(
-            subject=user.email
+        refresh_token = create_refresh_token(subject=user.email)
+        response.set_cookie(
+            key="access_token",
+            value=access_token,
+            httponly=True,
+            samesite="lax",
+            max_age=60 * 60 * 24 * 7,
+            path="/",
         )
         response.set_cookie(
-                key="access_token",
-                value=access_token,
-                httponly=True,
-                samesite="lax",   # "lax" hoặc "none" (nếu dùng HTTPS)
-                max_age=60*60*24*7,
-                path="/"
-            )
+            key="refresh_token",
+            value=refresh_token,
+            httponly=True,
+            samesite="lax",
+            max_age=60 * 60 * 24 * 7,
+            path="/auth/refresh",
+        )
         return {
             "access_token": access_token,
             "refresh_token": refresh_token,
-            "token_type": "bearer"
+            "token_type": "bearer",
         }
     except Exception:
         raise HTTPException(
@@ -180,7 +209,7 @@ async def forgot_password(
     reset_token = create_password_reset_token(user.email)
     
     # Trong môi trường phát triển, chỉ in ra token
-    print(f"Password reset token for {user.email}: {reset_token}")
+    logger.debug("Password reset token for %s: %s", user.email, reset_token)
     
     # Trong môi trường sản xuất, sẽ gửi email
     # background_tasks.add_task(
