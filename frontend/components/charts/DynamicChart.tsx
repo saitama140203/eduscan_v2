@@ -27,13 +27,14 @@ interface DynamicChartProps {
   width?: number | string
   height?: number | string
   xDataKey?: string
-  dataKeys: { key: string; name?: string; color?: string }[]
+  dataKeys?: { key: string; name?: string; color?: string }[]
   showLegend?: boolean
   showTooltip?: boolean
   showGrid?: boolean
+  className?: string
 }
 
-export function DynamicChart({
+export default function DynamicChart({
   type = 'line',
   data = [],
   width = '100%',
@@ -43,6 +44,7 @@ export function DynamicChart({
   showLegend = true,
   showTooltip = true,
   showGrid = true,
+  className,
 }: DynamicChartProps) {
   const [isClient, setIsClient] = useState(false)
 
@@ -67,6 +69,7 @@ export function DynamicChart({
 
   // Render chart tương ứng với type
   return (
+    <div className={className}>
     <ResponsiveContainer width={width} height={height}>
       {type === 'line' && (
         <LineChart data={data}>
@@ -141,5 +144,6 @@ export function DynamicChart({
         </AreaChart>
       )}
     </ResponsiveContainer>
+    </div>
   )
 }

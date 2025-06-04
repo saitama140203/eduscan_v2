@@ -3,6 +3,9 @@ from sqlalchemy import select, update, and_, not_
 from sqlalchemy.exc import IntegrityError
 from typing import Optional, Dict, Any, List
 from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 from app.models.user import User
 from app.schemas.user import UserCreate, UserUpdate
@@ -27,13 +30,13 @@ class UserService:
 
     @staticmethod
     async def create_user(db: AsyncSession, user_in: UserCreate) -> User:
-        print(f"🔍 Kiểm tra email tồn tại: {user_in.email}")
+        logger.debug("\ud83d\udd0d Kiểm tra email tồn tại: %s", user_in.email)
         existing_user = await UserService.get_by_email(db, user_in.email)
         if existing_user:
-            print(f"Email đã tồn tại: {user_in.email}")
+            logger.debug("Email đã tồn tại: %s", user_in.email)
             raise ValueError("Email đã được sử dụng")
         
-        print(f"✅ Email chưa tồn tại, tạo user mới...")
+        logger.debug("\u2705 Email chưa tồn tại, tạo user mới...")
         hashed_password = get_password_hash(user_in.password)
         
         db_user = User(
@@ -49,28 +52,31 @@ class UserService:
             thoiGianCapNhat=datetime.utcnow()
         )
         
-        print(f"🔍 User object tạo:", {
-            "email": db_user.email,
-            "hoTen": db_user.hoTen,
-            "vaiTro": db_user.vaiTro,
-            "maToChuc": db_user.maToChuc,
-            "soDienThoai": db_user.soDienThoai
-        })
+        logger.debug(
+            "\ud83d\udd0d User object tạo: %s",
+            {
+                "email": db_user.email,
+                "hoTen": db_user.hoTen,
+                "vaiTro": db_user.vaiTro,
+                "maToChuc": db_user.maToChuc,
+                "soDienThoai": db_user.soDienThoai,
+            },
+        )
         
         try:
             db.add(db_user)
             await db.commit()
             await db.refresh(db_user)
-            print(f"✅ User tạo thành công với ID: {db_user.maNguoiDung}")
+            logger.debug("\u2705 User tạo thành công với ID: %s", db_user.maNguoiDung)
             return db_user
         except IntegrityError as e:
             await db.rollback()
-            print(f"❌ IntegrityError chi tiết: {e}")
-            print(f"❌ Lỗi args: {e.args}")
+            logger.error("\u274c IntegrityError chi tiết: %s", e)
+            logger.error("\u274c Lỗi args: %s", e.args)
             raise ValueError(f"Lỗi khi tạo người dùng: {str(e)}")
         except Exception as e:
             await db.rollback()
-            print(f"❌ Exception khác: {type(e).__name__}: {e}")
+            logger.error("\u274c Exception khác: %s: %s", type(e).__name__, e)
             raise ValueError(f"Lỗi không xác định: {str(e)}")
     
     @staticmethod

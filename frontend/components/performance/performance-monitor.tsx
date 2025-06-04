@@ -28,8 +28,9 @@ export function PerformanceMonitor() {
 
     // Track resource loading errors
     window.addEventListener("error", (event) => {
-      if (event.target !== window) {
-        trackEvent("resource_error", "performance", event.target?.tagName || "unknown")
+      if (event.target && event.target !== window) {
+        const target = event.target as HTMLElement
+        trackEvent("resource_error", "performance", target.tagName || "unknown")
       }
     })
 

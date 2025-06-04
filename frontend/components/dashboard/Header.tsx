@@ -3,6 +3,7 @@
 import type React from "react"
 
 import { useState } from "react"
+import { debugLog } from "@/lib/utils/debug"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Bell, Search, User, LogOut, Menu, X } from "lucide-react"
@@ -28,7 +29,7 @@ export function Header() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
-    console.log("Search query:", searchQuery)
+    debugLog("Search query:", searchQuery)
     // Implement search functionality
   }
 
