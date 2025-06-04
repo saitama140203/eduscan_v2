@@ -34,7 +34,7 @@ app = FastAPI(
 # Cấu hình CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Trong môi trường sản xuất, nên chỉ định rõ các domain được phép
+    allow_origins=["*"],  # Cho phép tất cả origins trong development
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -59,15 +59,25 @@ app.include_router(students.router, prefix=f"{settings.API_PREFIX}/v1")
 # Root endpoint
 @app.get("/")
 async def root():
-    return {"message": "Chào mừng đến với EduScan API! Xem tài liệu API tại /api/docs"}
+    return {"message": "Chào mừng đến với EduScan API! Xem tài liệu API tại /api/docs", "status": "ok"}
 
-# Endpoint để kiểm tra tình trạng hệ thống
+# Health endpoints (multiple locations for compatibility)
+@app.get("/health")
+async def health_check_root():
+    return {
+        "status": "ok",
+        "api_version": "v1",
+        "app_name": settings.APP_NAME,
+        "message": "EduScan Backend is running!"
+    }
+
 @app.get(f"{settings.API_PREFIX}/health")
 async def health_check():
     return {
         "status": "ok",
         "api_version": "v1",
-        "app_name": settings.APP_NAME
+        "app_name": settings.APP_NAME,
+        "message": "EduScan Backend is running!"
     }
 
 # Xử lý exception toàn cục
