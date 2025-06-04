@@ -2,7 +2,6 @@
 "use client"
 
 import { createContext, useState, useEffect } from "react"
-import { debugLog } from "@/lib/utils/debug"
 import { authApi } from "@/lib/api/auth"
 import { usePathname, useRouter } from "next/navigation"
 
@@ -94,35 +93,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isAuthPage = pathname === "/auth/login" || pathname === "/auth/register"
 
   useEffect(() => {
-    debugLog(`[AuthProvider] Effect running. isAuthPage: ${isAuthPage}`);
+    console.log(`[AuthProvider] Effect running. isAuthPage: ${isAuthPage}`);
     // Trên trang xác thực, set isLoading false ngay lập tức và kiểm tra cache
     if (isAuthPage) {
-      debugLog("[AuthProvider] On auth page, setting isLoading to false.");
+      console.log("[AuthProvider] On auth page, setting isLoading to false.");
       setIsLoading(false)
       const { user: cachedUser } = getUserFromCache()
       if(cachedUser) {
-        debugLog("[AuthProvider] Found cached user on auth page.");
+        console.log("[AuthProvider] Found cached user on auth page.");
         setUser(cachedUser);
       } else {
-         debugLog("[AuthProvider] No cached user found on auth page.");
+         console.log("[AuthProvider] No cached user found on auth page.");
          setUser(null); // Đảm bảo user là null nếu không có cache
       }
       return // Dừng effect trên trang auth sau khi xử lý cache
     }
 
     // Trên các trang khác, kiểm tra user (có thể blocking nếu không có cache)
-    debugLog("[AuthProvider] On non-auth page, checking auth status.");
+    console.log("[AuthProvider] On non-auth page, checking auth status.");
     const { user: cachedUser, isCacheValid } = getUserFromCache()
 
     if (cachedUser && isCacheValid) {
-      debugLog("[AuthProvider] Found valid cache on non-auth page, using cache and refreshing.");
+      console.log("[AuthProvider] Found valid cache on non-auth page, using cache and refreshing.");
       // Sử dụng cache và refresh ngầm
       setUser(cachedUser)
       setIsLoading(false) // Set false vì đã có user từ cache
 
       authApi.getUser() // Refresh ngầm
         .then(userData => {
-          debugLog("[AuthProvider] Background getUser success.");
+          console.log("[AuthProvider] Background getUser success.");
           const mappedUser = mapUserFromApi(userData)
           if (mappedUser) {
             setUser(mappedUser)
@@ -135,12 +134,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // và sẽ xử lý ở lần gọi API tiếp theo hoặc khi cache hết hạn
         })
     } else {
-      debugLog("[AuthProvider] No valid cache on non-auth page, fetching user.");
+      console.log("[AuthProvider] No valid cache on non-auth page, fetching user.");
       // Cache không tồn tại hoặc hết hạn, phải gọi API blocking
       const checkAuth = async () => {
         try {
           const userData = await authApi.getUser() // Blocking call
-          debugLog("[AuthProvider] Blocking getUser success.");
+          console.log("[AuthProvider] Blocking getUser success.");
           const mappedUser = mapUserFromApi(userData)
           setUser(mappedUser)
           saveUserToCache(mappedUser)
@@ -149,28 +148,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(null)
           saveUserToCache(null)
         } finally {
-          debugLog("[AuthProvider] Blocking getUser finished, setting isLoading to false.");
+          console.log("[AuthProvider] Blocking getUser finished, setting isLoading to false.");
           setIsLoading(false) // Set false sau khi fetch blocking xong
         }
       }
       checkAuth()
     }
-     debugLog(`[AuthProvider] Effect finished. Current user: ${user?.id}, isLoading: ${isLoading}`);
+     console.log(`[AuthProvider] Effect finished. Current user: ${user?.id}, isLoading: ${isLoading}`);
 
   }, [isAuthPage]) // Chỉ chạy khi chuyển giữa trang auth và trang khác
 
   const login = async (email: string, password: string) => {
     try {
-      debugLog("[AuthProvider] Attempting login...");
+      console.log("[AuthProvider] Attempting login...");
       await authApi.login(email, password) // Đăng nhập, nhận cookie
-      debugLog("[AuthProvider] Login successful, fetching user...");
+      console.log("[AuthProvider] Login successful, fetching user...");
       // Sau khi login thành công, gọi getUser để cập nhật state user
       const userData = await authApi.getUser()
-      debugLog("[AuthProvider] getUser after login success.");
+      console.log("[AuthProvider] getUser after login success.");
       const mappedUser = mapUserFromApi(userData)
       setUser(mappedUser)
       saveUserToCache(mappedUser)
-      debugLog("[AuthProvider] User state updated after login.");
+      console.log("[AuthProvider] User state updated after login.");
       return { success: true, role: mappedUser?.role }
     } catch (error: any) { // Catch error with explicit any type
       console.error("[AuthProvider] Login failed:", error);
@@ -195,9 +194,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
-      debugLog("[AuthProvider] Attempting logout...")
+      console.log("[AuthProvider] Attempting logout...")
       await authApi.logout()
-      debugLog("[AuthProvider] Logout successful.")
+      console.log("[AuthProvider] Logout successful.")
       setUser(null)
       saveUserToCache(null)
     } catch (error) {
@@ -212,9 +211,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  // Log thay đổi state khi development
+  // console log để theo dõi user và isLoading của context
   useEffect(() => {
-      debugLog(`[AuthProvider] Context state updated: user: ${user?.id ? user.id : 'null'}, isLoading: ${isLoading}`);
+      console.log(`[AuthProvider] Context state updated: user: ${user?.id ? user.id : 'null'}, isLoading: ${isLoading}`);
   }, [user, isLoading]);
 
 

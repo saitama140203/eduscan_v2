@@ -1,5 +1,4 @@
 // Sentry integration for production error tracking
-import { debugLog, debugWarn, debugError } from "../utils/debug"
 
 interface SentryConfig {
   dsn?: string
@@ -67,19 +66,19 @@ class SentryManager {
       })
 
       this.isInitialized = true
-      debugLog("Sentry initialized successfully")
+      console.log("Sentry initialized successfully")
     } catch (error) {
-      debugWarn("Failed to initialize Sentry:", error)
+      console.warn("Failed to initialize Sentry:", error)
     }
   }
 
   captureException(error: Error, context?: Record<string, any>) {
     if (!this.isInitialized) {
-      debugError("Sentry not initialized, logging error:", error)
+      console.error("Sentry not initialized, logging error:", error)
       return
     }
 
-import("@sentry/nextjs").then((Sentry) => {
+    import("@sentry/nextjs").then((Sentry) => {
       Sentry.withScope((scope) => {
         if (context) {
           Object.entries(context).forEach(([key, value]) => {

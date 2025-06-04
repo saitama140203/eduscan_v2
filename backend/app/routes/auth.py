@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Request ,Response
-import logging
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
@@ -9,8 +8,6 @@ from app.models.user import User
 from app.schemas.token import Token, RefreshToken, PasswordResetRequest, PasswordReset
 from app.schemas.user import UserCreate, UserOut, UserChangePassword
 from app.core.config import settings
-
-logger = logging.getLogger(__name__)
 from app.core.security import (
     create_access_token, 
     create_refresh_token, 
@@ -67,10 +64,7 @@ async def login(
             detail="Tài khoản đã bị vô hiệu hóa"
         )
     
-    logger.debug(
-        "[LOGIN_ROUTE] About to create access token. Settings SECRET_KEY: %s",
-        settings.SECRET_KEY,
-    )
+    print(f"[LOGIN_ROUTE] About to create access token. Settings SECRET_KEY: {settings.SECRET_KEY}") # Log SECRET_KEY
     # Tạo access token và refresh token
     access_token = create_access_token(
         subject=user.email,
@@ -186,7 +180,7 @@ async def forgot_password(
     reset_token = create_password_reset_token(user.email)
     
     # Trong môi trường phát triển, chỉ in ra token
-    logger.debug("Password reset token for %s: %s", user.email, reset_token)
+    print(f"Password reset token for {user.email}: {reset_token}")
     
     # Trong môi trường sản xuất, sẽ gửi email
     # background_tasks.add_task(
