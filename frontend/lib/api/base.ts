@@ -2,9 +2,13 @@ import { debugLog, debugError } from "../utils/debug"
 
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"
 
+export interface ApiRequestOptions extends Omit<RequestInit, 'body'> {
+  body?: any
+}
+
 export async function apiRequest(
   endpoint: string,
-  options: RequestInit = {},
+  options: ApiRequestOptions = {},
   { skipAuth = false }: { skipAuth?: boolean } = {}
 ) {
   const headers = { ...(options.headers || {}) }
