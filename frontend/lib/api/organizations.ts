@@ -1,5 +1,6 @@
 // lib/api/organizations.ts
 import { apiRequest } from "./base"
+import { debugLog } from "../utils/debug"
 
 export interface Organization {
   id: number
@@ -47,7 +48,7 @@ export const organizationsApi = {
       diaChi: data.address,
       urlLogo: data.logo_url,
     }
-    console.log(payload)
+    debugLog(payload)
     return mapOrgFromApi(await apiRequest(`/organizations/${id}`, { method: "PUT", body: payload }))
   },
   delete: async (id: number) => {
