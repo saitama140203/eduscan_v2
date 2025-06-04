@@ -1,5 +1,6 @@
 'use client'
 import { useEffect } from 'react'
+import { debugLog } from '@/lib/utils/debug'
 
 export function PerfMonitorClient() {
   useEffect(() => {
@@ -8,7 +9,7 @@ export function PerfMonitorClient() {
         for (const entry of list.getEntries()) {
           if (entry.entryType === 'navigation') {
             const navEntry = entry as PerformanceNavigationTiming;
-            console.log('Navigation timing:', {
+            debugLog('Navigation timing:', {
               dns: navEntry.domainLookupEnd - navEntry.domainLookupStart,
               tcp: navEntry.connectEnd - navEntry.connectStart,
               request: navEntry.responseStart - navEntry.requestStart,
