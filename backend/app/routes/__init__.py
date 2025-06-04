@@ -1,4 +1,5 @@
-from . import auth, users, organizations, classes, students, exams, dashboard
+from . import auth, users, organizations, classes, students, exams, dashboard, settings, answer_templates
+
 
 __all__ = [
     'auth',
@@ -8,4 +9,6 @@ __all__ = [
     'students',
     'exams',
     'dashboard',
+    'settings',
+    'answer_templates',
 ]
