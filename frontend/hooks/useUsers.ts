@@ -1,6 +1,12 @@
 // hooks/useUsers.ts
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { usersApi, User } from '@/lib/api/users';
+import {
+  usersApi,
+  createUser,
+  updateUser as apiUpdateUser,
+  deleteUser as apiDeleteUser,
+  User,
+} from '@/lib/api/users';
 import { toast } from 'sonner';
 
 // Query keys
@@ -53,7 +59,7 @@ export function useCreateUser() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: usersApi.createUser,
+    mutationFn: createUser,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: userKeys.all });
       toast.success('Tạo người dùng thành công');
@@ -69,8 +75,8 @@ export function useUpdateUser() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ userId, data }: { userId: string; data: any }) => 
-      usersApi.updateUser(userId, data),
+    mutationFn: ({ userId, data }: { userId: string; data: any }) =>
+      apiUpdateUser(userId, data),
     onSuccess: (_, { userId }) => {
       queryClient.invalidateQueries({ queryKey: userKeys.all });
       queryClient.invalidateQueries({ queryKey: userKeys.detail(userId) });
@@ -87,7 +93,7 @@ export function useDeleteUser() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: usersApi.deleteUser,
+    mutationFn: apiDeleteUser,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: userKeys.all });
       toast.success('Xóa người dùng thành công');

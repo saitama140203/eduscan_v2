@@ -4,6 +4,9 @@ import uuid
 from jose import jwt, JWTError, ExpiredSignatureError
 from passlib.context import CryptContext
 from app.core.config import settings
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Thiết lập context cho bcrypt
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
@@ -74,8 +77,12 @@ def create_refresh_token(
         "jti": str(uuid.uuid4())
     }
 
-    print(f"[CREATE_REFRESH_TOKEN] Now (UTC): {now.isoformat()} | Expires at: {expire.isoformat()}")
-    print(f"[CREATE_REFRESH_TOKEN] Payload: {to_encode}")
+    logger.debug(
+        "[CREATE_REFRESH_TOKEN] Now (UTC): %s | Expires at: %s",
+        now.isoformat(),
+        expire.isoformat(),
+    )
+    logger.debug("[CREATE_REFRESH_TOKEN] Payload: %s", to_encode)
 
     encoded_jwt = jwt.encode(
         to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
@@ -101,8 +108,12 @@ def create_password_reset_token(
         "jti": str(uuid.uuid4())
     }
 
-    print(f"[CREATE_PASSWORD_RESET_TOKEN] Now (UTC): {now.isoformat()} | Expires at: {expire.isoformat()}")
-    print(f"[CREATE_PASSWORD_RESET_TOKEN] Payload: {to_encode}")
+    logger.debug(
+        "[CREATE_PASSWORD_RESET_TOKEN] Now (UTC): %s | Expires at: %s",
+        now.isoformat(),
+        expire.isoformat(),
+    )
+    logger.debug("[CREATE_PASSWORD_RESET_TOKEN] Payload: %s", to_encode)
 
     encoded_jwt = jwt.encode(
         to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
@@ -111,11 +122,17 @@ def create_password_reset_token(
 
 # Hàm xác minh token
 def verify_token(token: str, token_type: Optional[str] = None) -> Dict[str, Any]:
-    print(f"[VERIFY_TOKEN] Attempting to decode token: {token[:20]}...")
-    print(f"[VERIFY_TOKEN] Using SECRET_KEY: {settings.SECRET_KEY}, ALGORITHM: {settings.ALGORITHM}")
+    logger.debug("[VERIFY_TOKEN] Attempting to decode token: %s...", token[:20])
+    logger.debug(
+        "[VERIFY_TOKEN] Using SECRET_KEY: %s, ALGORITHM: %s",
+        settings.SECRET_KEY,
+        settings.ALGORITHM,
+    )
     try:
         if settings.DEBUG:
-            print("[VERIFY_TOKEN] DEBUG mode active, skipping token expiration check")
+            logger.debug(
+                "[VERIFY_TOKEN] DEBUG mode active, skipping token expiration check"
+            )
             verify_options = {
                 "verify_signature": True,
                 "verify_aud": False,
@@ -132,23 +149,30 @@ def verify_token(token: str, token_type: Optional[str] = None) -> Dict[str, Any]
             algorithms=[settings.ALGORITHM],
             options=verify_options
         )
-        print(f"[VERIFY_TOKEN] Decoded payload: {payload}")
+        logger.debug("[VERIFY_TOKEN] Decoded payload: %s", payload)
 
         if token_type and payload.get("type") != token_type:
-            print(f"[VERIFY_TOKEN] Error: Invalid token type. Expected {token_type}, got {payload.get('type')}")
+            logger.error(
+                "[VERIFY_TOKEN] Error: Invalid token type. Expected %s, got %s",
+                token_type,
+                payload.get("type"),
+            )
             raise JWTError(f"Token không phải loại {token_type}")
 
         if "exp" not in payload:
-            print("[VERIFY_TOKEN] Error: 'exp' field missing in token payload.")
+            logger.error("[VERIFY_TOKEN] Error: 'exp' field missing in token payload.")
             raise JWTError("Token thiếu trường hết hạn (exp)")
             
         return payload
     except ExpiredSignatureError as e:
-        print(f"[VERIFY_TOKEN] Error: Token has expired. {str(e)}")
+        logger.error("[VERIFY_TOKEN] Error: Token has expired. %s", str(e))
         raise Exception(f"Token đã hết hạn: {str(e)}")
     except JWTError as e:
-        print(f"[VERIFY_TOKEN] Error: Invalid token. {str(e)}")
+        logger.error("[VERIFY_TOKEN] Error: Invalid token. %s", str(e))
         raise Exception(f"Token không hợp lệ: {str(e)}")
     except Exception as e:
-        print(f"[VERIFY_TOKEN] Error: Unexpected error during token verification. {str(e)}")
+        logger.error(
+            "[VERIFY_TOKEN] Error: Unexpected error during token verification. %s",
+            str(e),
+        )
         raise Exception(f"Lỗi không xác định khi xác minh token: {str(e)}")
