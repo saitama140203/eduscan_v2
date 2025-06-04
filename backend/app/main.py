@@ -6,7 +6,7 @@ import time
 import uvicorn
 
 from app.core.config import settings
-from app.routes import auth, users, organizations, classes, students
+from app.routes import auth, users, organizations, classes, students, exams, dashboard, settings as settings_router, answer_templates
 from app.db.session import Base, engine
 
 # Import tất cả các model để đảm bảo chúng được đăng ký với Base
@@ -55,6 +55,10 @@ app.include_router(users.router, prefix=f"{settings.API_PREFIX}/v1")
 app.include_router(organizations.router, prefix=f"{settings.API_PREFIX}/v1")
 app.include_router(classes.router, prefix=f"{settings.API_PREFIX}/v1")
 app.include_router(students.router, prefix=f"{settings.API_PREFIX}/v1")
+app.include_router(exams.router, prefix=f"{settings.API_PREFIX}/v1")
+app.include_router(dashboard.router, prefix=f"{settings.API_PREFIX}/v1")
+app.include_router(settings_router.router, prefix=f"{settings.API_PREFIX}/v1")
+app.include_router(answer_templates.router, prefix=f"{settings.API_PREFIX}/v1")
 
 # Root endpoint
 @app.get("/")
