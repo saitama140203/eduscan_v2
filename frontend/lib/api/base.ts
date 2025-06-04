@@ -1,8 +1,14 @@
+import { debugLog, debugError } from "../utils/debug"
+
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1"
+
+export interface ApiRequestOptions extends Omit<RequestInit, 'body'> {
+  body?: any
+}
 
 export async function apiRequest(
   endpoint: string,
-  options: RequestInit = {},
+  options: ApiRequestOptions = {},
   { skipAuth = false }: { skipAuth?: boolean } = {}
 ) {
   const headers = { ...(options.headers || {}) }
@@ -32,7 +38,7 @@ export async function apiRequest(
   }
 
   // Log request để debug
-  console.log(`API Request to ${endpoint}:`, {
+  debugLog(`API Request to ${endpoint}:`, {
     method: fetchOptions.method || 'GET',
     headers: fetchOptions.headers,
     bodyType: fetchOptions.body ? typeof fetchOptions.body : null
@@ -41,7 +47,7 @@ export async function apiRequest(
   const response = await fetch(`${API_BASE_URL}${endpoint}`, fetchOptions)
 
   // Log response để debug
-  console.log(`API Response from ${endpoint}:`, {
+  debugLog(`API Response from ${endpoint}:`, {
     status: response.status,
     statusText: response.statusText,
     headers: Object.fromEntries(response.headers.entries()),
@@ -49,10 +55,17 @@ export async function apiRequest(
   })
 
   // Clone response để đọc body mà không ảnh hưởng đến lần đọc tiếp theo (json/text)
-  const responseClone = response.clone();
-  responseClone.text().then(text => {
-      console.log(`API Response Body (preview) from ${endpoint}:`, text.substring(0, 200));
-  }).catch(e => console.error(`Failed to read response body preview from ${endpoint}:`, e));
+  if (process.env.NODE_ENV === 'development') {
+    const responseClone = response.clone();
+    responseClone.text()
+      .then(text => {
+        debugLog(
+          `API Response Body (preview) from ${endpoint}:`,
+          text.substring(0, 200)
+        );
+      })
+      .catch(e => debugError(`Failed to read response body preview from ${endpoint}:`, e));
+  }
 
   if (response.status === 401 && !skipAuth) {
     if (typeof window !== "undefined") {
@@ -72,9 +85,9 @@ export async function apiRequest(
 
   const contentType = response.headers.get("Content-Type")
   if (contentType && contentType.includes("application/json")) {
-    console.log(`API Response from ${endpoint}: Parsing as JSON`);
+    debugLog(`API Response from ${endpoint}: Parsing as JSON`);
     return response.json()
   }
-  console.log(`API Response from ${endpoint}: Parsing as Text`);
+  debugLog(`API Response from ${endpoint}: Parsing as Text`);
   return response.text()
 }
