@@ -101,8 +101,8 @@ async def login(
 @router.post("/refresh", response_model=Token)
 async def refresh_token(
     token_data: RefreshToken,
-    db: AsyncSession = Depends(get_db),
     response: Response,
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Làm mới access token bằng refresh token

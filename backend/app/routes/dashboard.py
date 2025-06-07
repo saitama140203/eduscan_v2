@@ -14,9 +14,9 @@ async def get_overview_stats(
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if current_user.vaiTro == "ADMIN":
+    if current_user.vaiTro.upper() == "ADMIN":
         return await DashboardService.admin_stats(db)
-    elif current_user.vaiTro == "MANAGER":
+    elif current_user.vaiTro.upper() == "MANAGER":
         return await DashboardService.manager_stats(db, current_user.maToChuc)
     else:
         return await DashboardService.teacher_stats(db, current_user.maNguoiDung)

@@ -275,4 +275,227 @@ class StudentService:
         for student in transferred_students:        
                 await db.refresh(student)
         
-        return transferred_students 
+        return transferred_students
+
+
+    # ========== NEW EXCEL IMPORT/EXPORT METHODS ==========
+    
+    @staticmethod
+    async def import_from_excel(db: AsyncSession, file, class_id: int) -> dict:
+        """Import học sinh từ file Excel"""
+        import pandas as pd
+        import io
+        
+        try:
+            # Đọc file Excel
+            contents = await file.read()
+            df = pd.read_excel(io.BytesIO(contents))
+            
+            # Validate columns
+            required_columns = ['ho_ten', 'ngay_sinh', 'gioi_tinh', 'ma_hoc_sinh_truong']
+            missing_columns = [col for col in required_columns if col not in df.columns]
+            if missing_columns:
+                raise ValueError(f"Thiếu các cột: {', '.join(missing_columns)}")
+            
+            total_processed = len(df)
+            successful = 0
+            failed = 0
+            errors = []
+            
+            for index, row in df.iterrows():
+                try:
+                    # Validate data
+                    if pd.isna(row['ho_ten']) or pd.isna(row['ma_hoc_sinh_truong']):
+                        errors.append(f"Dòng {index + 2}: Thiếu thông tin bắt buộc")
+                        failed += 1
+                        continue
+                    
+                    # Check if student already exists
+                    existing = await db.execute(
+                        select(Student).where(Student.maHocSinhTruong == row['ma_hoc_sinh_truong'])
+                    )
+                    if existing.scalar_one_or_none():
+                        errors.append(f"Dòng {index + 2}: Mã học sinh {row['ma_hoc_sinh_truong']} đã tồn tại")
+                        failed += 1
+                        continue
+                    
+                    # Create student
+                    student_data = StudentCreate(
+                        hoTen=str(row['ho_ten']).strip(),
+                        ngaySinh=pd.to_datetime(row['ngay_sinh']).date() if not pd.isna(row['ngay_sinh']) else None,
+                        gioiTinh=str(row['gioi_tinh']).strip() if not pd.isna(row['gioi_tinh']) else None,
+                        maHocSinhTruong=str(row['ma_hoc_sinh_truong']).strip(),
+                        maLopHoc=class_id,
+                        diaChi=str(row.get('dia_chi', '')).strip() if not pd.isna(row.get('dia_chi')) else None,
+                        soDienThoai=str(row.get('so_dien_thoai', '')).strip() if not pd.isna(row.get('so_dien_thoai')) else None,
+                        email=str(row.get('email', '')).strip() if not pd.isna(row.get('email')) else None,
+                        hoTenPhuHuynh=str(row.get('ho_ten_phu_huynh', '')).strip() if not pd.isna(row.get('ho_ten_phu_huynh')) else None,
+                        soDienThoaiPhuHuynh=str(row.get('so_dien_thoai_phu_huynh', '')).strip() if not pd.isna(row.get('so_dien_thoai_phu_huynh')) else None
+                    )
+                    
+                    await StudentService.create_student(db, student_data)
+                    successful += 1
+                    
+                except Exception as e:
+                    errors.append(f"Dòng {index + 2}: {str(e)}")
+                    failed += 1
+            
+            return {
+                "total_processed": total_processed,
+                "successful": successful,
+                "failed": failed,
+                "errors": errors
+            }
+            
+        except Exception as e:
+            raise ValueError(f"Lỗi đọc file Excel: {str(e)}")
+    
+    @staticmethod
+    async def export_to_excel(students: List[Student]) -> bytes:
+        """Export danh sách học sinh ra Excel"""
+        import pandas as pd
+        import io
+        
+        # Prepare data
+        data = []
+        for student in students:
+            data.append({
+                'STT': len(data) + 1,
+                'Mã học sinh': student.maHocSinhTruong,
+                'Họ tên': student.hoTen,
+                'Ngày sinh': student.ngaySinh.strftime('%d/%m/%Y') if student.ngaySinh else '',
+                'Giới tính': student.gioiTinh or '',
+                'Lớp': student.lop_hoc.tenLop if student.lop_hoc else '',
+                'Địa chỉ': student.diaChi or '',
+                'Số điện thoại': student.soDienThoai or '',
+                'Email': student.email or '',
+                'Họ tên phụ huynh': student.hoTenPhuHuynh or '',
+                'SĐT phụ huynh': student.soDienThoaiPhuHuynh or '',
+                'Trạng thái': 'Hoạt động' if student.trangThai else 'Không hoạt động',
+                'Ngày tạo': student.thoiGianTao.strftime('%d/%m/%Y %H:%M') if student.thoiGianTao else ''
+            })
+        
+        # Create DataFrame
+        df = pd.DataFrame(data)
+        
+        # Create Excel file
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Danh sách học sinh', index=False)
+            
+            # Format worksheet
+            worksheet = writer.sheets['Danh sách học sinh']
+            for column in worksheet.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = min(max_length + 2, 50)
+                worksheet.column_dimensions[column_letter].width = adjusted_width
+        
+        return output.getvalue()
+    
+    @staticmethod
+    async def create_import_template() -> bytes:
+        """Tạo template Excel để import học sinh"""
+        import pandas as pd
+        import io
+        
+        # Template data with sample row
+        template_data = {
+            'ho_ten': ['Nguyễn Văn A'],
+            'ngay_sinh': ['01/01/2005'],
+            'gioi_tinh': ['Nam'],
+            'ma_hoc_sinh_truong': ['HS001'],
+            'dia_chi': ['123 Đường ABC, Quận 1, TP.HCM'],
+            'so_dien_thoai': ['0123456789'],
+            'email': ['student@example.com'],
+            'ho_ten_phu_huynh': ['Nguyễn Văn B'],
+            'so_dien_thoai_phu_huynh': ['0987654321']
+        }
+        
+        df = pd.DataFrame(template_data)
+        
+        # Create Excel file
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df.to_excel(writer, sheet_name='Template', index=False)
+            
+            # Add instructions sheet
+            instructions = pd.DataFrame({
+                'Hướng dẫn sử dụng': [
+                    '1. Điền thông tin học sinh vào sheet "Template"',
+                    '2. Các cột bắt buộc: ho_ten, ma_hoc_sinh_truong',
+                    '3. Định dạng ngày sinh: DD/MM/YYYY',
+                    '4. Giới tính: Nam/Nữ',
+                    '5. Mã học sinh phải duy nhất',
+                    '6. Lưu file và upload lên hệ thống'
+                ]
+            })
+            instructions.to_excel(writer, sheet_name='Hướng dẫn', index=False)
+        
+        return output.getvalue()
+    
+    @staticmethod
+    async def bulk_operations(
+        db: AsyncSession, 
+        operation: str, 
+        student_ids: List[int], 
+        current_user,
+        target_class_id: Optional[int] = None,
+        new_status: Optional[bool] = None
+    ) -> dict:
+        """Thực hiện các thao tác hàng loạt"""
+        processed = len(student_ids)
+        successful = 0
+        failed = 0
+        errors = []
+        
+        for student_id in student_ids:
+            try:
+                student = await StudentService.get_student_by_id(db, student_id)
+                if not student:
+                    errors.append(f"Học sinh ID {student_id}: Không tìm thấy")
+                    failed += 1
+                    continue
+                
+                # Check permissions
+                if current_user.vaiTro == "MANAGER" and student.lop_hoc.maToChuc != current_user.maToChuc:
+                    errors.append(f"Học sinh ID {student_id}: Không có quyền truy cập")
+                    failed += 1
+                    continue
+                if current_user.vaiTro == "TEACHER" and student.lop_hoc.maGiaoVienChuNhiem != current_user.maNguoiDung:
+                    errors.append(f"Học sinh ID {student_id}: Không có quyền truy cập")
+                    failed += 1
+                    continue
+                
+                # Perform operation
+                if operation == "delete":
+                    await StudentService.delete_student(db, student_id)
+                elif operation == "move_class" and target_class_id:
+                    student.maLopHoc = target_class_id
+                elif operation == "update_status" and new_status is not None:
+                    student.trangThai = new_status
+                else:
+                    errors.append(f"Học sinh ID {student_id}: Thao tác không hợp lệ")
+                    failed += 1
+                    continue
+                
+                successful += 1
+                
+            except Exception as e:
+                errors.append(f"Học sinh ID {student_id}: {str(e)}")
+                failed += 1
+        
+        await db.commit()
+        
+        return {
+            "processed": processed,
+            "successful": successful,
+            "failed": failed,
+            "errors": errors
+        } 

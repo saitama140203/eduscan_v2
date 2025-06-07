@@ -15,7 +15,7 @@ class ClassAnalyticsService:
         db: AsyncSession, 
         class_id: int, 
         filters: Optional[AnalyticsFilters] = None
-    ) -> ClassAnalytics:
+    ) -> ClassAnalytics:    
         # Verify class exists
         class_stmt = select(ClassRoom).where(ClassRoom.maLopHoc == class_id)
         class_result = await db.execute(class_stmt)

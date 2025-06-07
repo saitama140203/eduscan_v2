@@ -14,4 +14,7 @@ python-dotenv==1.0.0
 pillow==10.2.0
 opencv-python==4.9.0.80
 numpy==1.26.3
-ultralytics==8.0.227 
+ultralytics==8.0.227
+pandas==2.1.4
+openpyxl==3.1.2
+websockets==12.0 

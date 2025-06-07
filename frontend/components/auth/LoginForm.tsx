@@ -4,7 +4,8 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useAuth } from "@/hooks/useAuth"
-import { AlertCircle, WifiOff } from "lucide-react"
+import { ErrorMessage, determineErrorType } from "@/components/ui/error-message"
+import Link from "next/link"
 
 export interface LoginFormProps {
   initialApiStatus?: boolean
@@ -16,10 +17,14 @@ export function LoginForm({ initialApiStatus = false }: LoginFormProps) {
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [isNetworkError, setIsNetworkError] = useState(initialApiStatus)
+  const [errorType, setErrorType] = useState<"network" | "server" | "validation" | "auth" | "cors" | "unknown">("unknown")
   const { login } = useAuth()
 
   useEffect(() => {
-    setIsNetworkError(initialApiStatus)
+    if (initialApiStatus) {
+      setIsNetworkError(true)
+      setErrorType("network")
+    }
   }, [initialApiStatus])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -27,14 +32,28 @@ export function LoginForm({ initialApiStatus = false }: LoginFormProps) {
     setError("")
     setIsLoading(true)
     setIsNetworkError(false)
+    setErrorType("unknown")
+    
     try {
       const result = await login(email, password)
       if (!result.success) {
-        setError(result.message || "Login failed")
+        setError(result.message || "Đăng nhập không thành công")
         setIsNetworkError(result.isNetworkError || false)
+        
+        // Xác định loại lỗi cụ thể
+        if (result.message?.includes("CORS")) {
+          setErrorType("cors")
+        } else {
+          setErrorType(result.isNetworkError ? "network" : "auth")
+        }
       }
-    } catch (err) {
-      setError("An error occurred during login")
+    } catch (err: any) {
+      console.error("Login error:", err)
+      setError(err.message || "Đã xảy ra lỗi trong quá trình đăng nhập")
+      setErrorType(determineErrorType(err))
+      if (err instanceof TypeError && err.message.includes("fetch")) {
+        setIsNetworkError(true)
+      }
     } finally {
       setIsLoading(false)
     }
@@ -42,19 +61,14 @@ export function LoginForm({ initialApiStatus = false }: LoginFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      {(error || isNetworkError) && (
-        <div className={`border px-4 py-3 rounded flex items-start ${isNetworkError ? "bg-yellow-50 border-yellow-200 text-yellow-700" : "bg-red-50 border-red-200 text-red-700"}`}>
-          {isNetworkError ? (
-            <WifiOff className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" />
-          ) : (
-            <AlertCircle className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" />
-          )}
-          <div>
-            <p className="font-medium">{isNetworkError ? "Connection Error" : "Authentication Error"}</p>
-            <p className="text-sm">{error || "API server appears to be offline or unreachable"}</p>
-          </div>
-        </div>
+      {error && (
+        <ErrorMessage 
+          message={error} 
+          errorType={errorType}
+          className="mb-4"
+        />
       )}
+      
       <Input
         id="email"
         name="email"
@@ -77,9 +91,17 @@ export function LoginForm({ initialApiStatus = false }: LoginFormProps) {
         onChange={e => setPassword(e.target.value)}
         disabled={isLoading}
       />
-      <Button type="submit" className="w-full" disabled={isLoading}>
-        {isLoading ? "Đang đăng nhập..." : "Đăng nhập"}
-      </Button>
+      <div className="flex flex-col space-y-4">
+        <Button type="submit" className="w-full" disabled={isLoading}>
+          {isLoading ? "Đang đăng nhập..." : "Đăng nhập"}
+        </Button>
+        
+        {errorType === "cors" && (
+          <Link href="/docs/cors-fix.md" target="_blank" className="text-center text-xs text-blue-600 hover:underline">
+            Xem hướng dẫn sửa lỗi CORS
+          </Link>
+        )}
+      </div>
     </form>
   )
 }

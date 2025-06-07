@@ -57,19 +57,19 @@ export async function checkApiConnectivity(apiUrl: string): Promise<boolean> {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 second timeout
 
-    // Sử dụng endpoint /health cho GET request
+    // Sử dụng endpoint /health hoặc / tùy thuộc vào cấu hình API
     try {
       const response = await fetch(`http://127.0.0.1:8000/health`, {
         method: "GET",
         signal: controller.signal,
-        mode: "no-cors",
+        mode: "cors", // Thay đổi từ 'no-cors' sang 'cors'
         cache: "no-store",
         headers: {
           "Cache-Control": "no-cache",
         },
       })
       clearTimeout(timeoutId)
-      return true
+      return response.ok || response.status === 200
     } catch (getError) {
       console.warn("GET /health failed, thử GET /:", getError)
       // Nếu GET /health fail, thử GET /
@@ -77,14 +77,14 @@ export async function checkApiConnectivity(apiUrl: string): Promise<boolean> {
         const response = await fetch(apiUrl, {
           method: "GET",
           signal: controller.signal,
-          mode: "no-cors",
+          mode: "cors", // Thay đổi từ 'no-cors' sang 'cors'
           cache: "no-store",
           headers: {
             "Cache-Control": "no-cache",
           },
         })
         clearTimeout(timeoutId)
-        return true
+        return response.ok || response.status === 200
       } catch (rootError) {
         clearTimeout(timeoutId)
         throw rootError

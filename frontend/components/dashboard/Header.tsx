@@ -21,7 +21,12 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 
-export function Header() {
+interface HeaderProps {
+  onSidebarToggle?: () => void;
+  isSidebarOpen?: boolean;
+}
+
+export function Header({ onSidebarToggle, isSidebarOpen }: HeaderProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const router = useRouter()
   const { user, logout } = useAuth()
@@ -46,8 +51,21 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-10 h-16 bg-white border-b shadow-sm flex items-center justify-between px-4 lg:px-6">
-      <div className="flex items-center gap-4 lg:hidden">
-        <span className="text-xl font-medium text-primary">EduScan</span>
+      <div className="flex items-center gap-4">
+        {onSidebarToggle && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onSidebarToggle}
+            className="mr-2"
+            aria-label={isSidebarOpen ? "Close sidebar" : "Open sidebar"}
+          >
+            {isSidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </Button>
+        )}
+        <div className="lg:hidden">
+          <span className="text-xl font-medium text-primary">EduScan</span>
+        </div>
       </div>
 
       <form onSubmit={handleSearch} className="hidden md:flex items-center w-full max-w-md">

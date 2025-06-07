@@ -14,6 +14,7 @@ export interface Class {
   tenGiaoVienChuNhiem?: string;
   tenToChuc?: string;
   total_students?: number;
+  total_exams?: number;
 }
 
 export interface ClassCreate {
@@ -52,7 +53,7 @@ export const classesApi = {
       if (params.limit !== undefined) searchParams.append('limit', params.limit.toString());
     }
     const queryString = searchParams.toString();
-    return apiRequest(`/classes${queryString ? `?${queryString}` : ''}`);
+        return apiRequest(`/classes/${queryString ? `?${queryString}` : ''}`);
   },
 
   // Lấy chi tiết lớp học
@@ -62,7 +63,7 @@ export const classesApi = {
 
   // Tạo lớp học mới
   createClass: async (data: ClassCreate) => {
-    return apiRequest("/classes", {
+    return apiRequest("/classes/", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),

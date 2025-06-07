@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useCreateClass } from "@/hooks/useClasses";
 import { useOrganizations } from "@/hooks/useOrganizations";
@@ -37,8 +37,12 @@ export default function AdminCreateClassPage() {
   const router = useRouter();
   const createClassMutation = useCreateClass();
   
-  const { data: organizations = [], isLoading: orgLoading } = useOrganizations();
-  const { data: teachers = [], isLoading: teachersLoading } = useTeachers(undefined, 0, 100);
+  const { data: organizations = [], isLoading: orgLoading, error: orgError } = useOrganizations();
+  const { data: teachers = [], isLoading: teachersLoading, error: teachersError } = useTeachers(undefined, 0, 100);
+
+  // Debug logging
+  console.log('Organizations:', { organizations, isLoading: orgLoading, error: orgError });
+  console.log('Teachers:', { teachers, isLoading: teachersLoading, error: teachersError });
 
   const form = useForm<ClassCreate>({
     resolver: zodResolver(formSchema),
@@ -52,6 +56,22 @@ export default function AdminCreateClassPage() {
     },
   });
 
+  // Watch maToChuc để filter giáo viên theo tổ chức
+  const selectedOrgId = form.watch("maToChuc");
+
+  // Filter giáo viên theo tổ chức đã chọn
+  const filteredTeachers = useMemo(() => {
+    if (!selectedOrgId || selectedOrgId === 0) return [];
+    return (teachers || []).filter((teacher: any) => teacher.maToChuc === selectedOrgId);
+  }, [teachers, selectedOrgId]);
+
+  // Reset giáo viên khi đổi tổ chức
+  useEffect(() => {
+    if (selectedOrgId && selectedOrgId !== 0) {
+      form.setValue("maGiaoVienChuNhiem", undefined);
+    }
+  }, [selectedOrgId, form]);
+
   const onSubmit = async (values: ClassCreate) => {
     try {
       await createClassMutation.mutateAsync(values);
@@ -60,6 +80,141 @@ export default function AdminCreateClassPage() {
       console.error("Failed to create class:", error);
     }
   };
+
+  // Tạo các render functions được memo hóa để tránh lỗi key prop
+  const renderTenLopField = useMemo(() => {
+    return ({ field }: { field: any }) => (
+      <FormItem>
+        <FormLabel>Tên lớp học *</FormLabel>
+        <FormControl>
+          <Input placeholder="Nhập tên lớp học" {...field} />
+        </FormControl>
+        <FormMessage />
+      </FormItem>
+    );
+  }, []);
+
+  const renderMaToChucField = useMemo(() => {
+    return ({ field }: { field: any }) => (
+      <FormItem>
+        <FormLabel>Tổ chức *</FormLabel>
+        <Select 
+          onValueChange={(value) => field.onChange(parseInt(value))}
+          value={field.value ? String(field.value) : ""}
+        >
+          <FormControl>
+            <SelectTrigger>
+              <SelectValue placeholder="Chọn tổ chức" />
+            </SelectTrigger>
+          </FormControl>
+          <SelectContent>
+            {organizations?.filter(org => org?.id).map((org) => (
+              <SelectItem key={`org-${org.id}`} value={String(org.id)}>
+                {org.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <FormMessage />
+      </FormItem>
+    );
+  }, [organizations]);
+
+  const renderCapHocField = useMemo(() => {
+    return ({ field }: { field: any }) => (
+      <FormItem>
+        <FormLabel>Cấp học</FormLabel>
+        <Select onValueChange={field.onChange} value={field.value}>
+          <FormControl>
+            <SelectTrigger>
+              <SelectValue placeholder="Chọn cấp học" />
+            </SelectTrigger>
+          </FormControl>
+          <SelectContent>
+            <SelectItem value="THPT">THPT</SelectItem>
+            <SelectItem value="THCS">THCS</SelectItem>
+            <SelectItem value="TIEU_HOC">Tiểu học</SelectItem>
+            <SelectItem value="TRUONG_DAI_HOC">Đại học</SelectItem>
+          </SelectContent>
+        </Select>
+        <FormMessage />
+      </FormItem>
+    );
+  }, []);
+
+  const renderNamHocField = useMemo(() => {
+    return ({ field }: { field: any }) => (
+      <FormItem>
+        <FormLabel>Năm học</FormLabel>
+        <FormControl>
+          <Input placeholder="2024-2025" {...field} />
+        </FormControl>
+        <FormMessage />
+      </FormItem>
+    );
+  }, []);
+
+  const renderGiaoVienField = useMemo(() => {
+    const hasSelectedOrg = selectedOrgId && selectedOrgId !== 0;
+    
+    return ({ field }: { field: any }) => (
+      <FormItem>
+        <FormLabel>Giáo viên chủ nhiệm</FormLabel>
+        <Select 
+          onValueChange={(value) => field.onChange(value === "none" ? undefined : parseInt(value))}
+          value={field.value ? String(field.value) : "none"}
+          disabled={!hasSelectedOrg}
+        >
+          <FormControl>
+            <SelectTrigger>
+              <SelectValue placeholder={
+                !hasSelectedOrg 
+                  ? "Vui lòng chọn tổ chức trước" 
+                  : "Chọn giáo viên chủ nhiệm"
+              } />
+            </SelectTrigger>
+          </FormControl>
+          <SelectContent>
+            <SelectItem value="none">Chưa chọn</SelectItem>
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            {filteredTeachers.map((teacher: any) => (
+              <SelectItem key={teacher.maNguoiDung} value={String(teacher.maNguoiDung)}>
+                {teacher.hoTen} ({teacher.email})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <FormMessage />
+        {!hasSelectedOrg && (
+          <p className="text-sm text-muted-foreground mt-1">
+            Chọn tổ chức trước để hiển thị danh sách giáo viên
+          </p>
+        )}
+        {hasSelectedOrg && filteredTeachers.length === 0 && (
+          <p className="text-sm text-muted-foreground mt-1">
+            Không có giáo viên nào trong tổ chức này
+          </p>
+        )}
+      </FormItem>
+    );
+  }, [selectedOrgId, filteredTeachers]);
+
+  const renderMoTaField = useMemo(() => {
+    return ({ field }: { field: any }) => (
+      <FormItem>
+        <FormLabel>Mô tả</FormLabel>
+        <FormControl>
+          <Textarea 
+            placeholder="Nhập mô tả về lớp học..."
+            className="resize-none"
+            rows={4}
+            {...field}
+          />
+        </FormControl>
+        <FormMessage />
+      </FormItem>
+    );
+  }, []);
 
   if (orgLoading || teachersLoading) {
     return (
@@ -115,43 +270,15 @@ export default function AdminCreateClassPage() {
                 <FormField
                   control={form.control}
                   name="tenLop"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Tên lớp học *</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Nhập tên lớp học" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  key="tenLop"
+                  render={renderTenLopField}
                 />
 
                 <FormField
                   control={form.control}
                   name="maToChuc"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Tổ chức *</FormLabel>
-                      <Select 
-                        onValueChange={(value) => field.onChange(parseInt(value))}
-                        value={field.value ? String(field.value) : ""}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Chọn tổ chức" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {organizations.map((org) => (
-                            <SelectItem key={org.maToChuc} value={String(org.maToChuc)}>
-                              {org.tenToChuc}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  key="maToChuc"
+                  render={renderMaToChucField}
                 />
               </div>
 
@@ -159,97 +286,30 @@ export default function AdminCreateClassPage() {
                 <FormField
                   control={form.control}
                   name="capHoc"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Cấp học</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Chọn cấp học" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="Lớp 1">Lớp 1</SelectItem>
-                          <SelectItem value="Lớp 2">Lớp 2</SelectItem>
-                          <SelectItem value="Lớp 3">Lớp 3</SelectItem>
-                          <SelectItem value="Lớp 4">Lớp 4</SelectItem>
-                          <SelectItem value="Lớp 5">Lớp 5</SelectItem>
-                          <SelectItem value="Lớp 6">Lớp 6</SelectItem>
-                          <SelectItem value="Lớp 7">Lớp 7</SelectItem>
-                          <SelectItem value="Lớp 8">Lớp 8</SelectItem>
-                          <SelectItem value="Lớp 9">Lớp 9</SelectItem>
-                          <SelectItem value="Lớp 10">Lớp 10</SelectItem>
-                          <SelectItem value="Lớp 11">Lớp 11</SelectItem>
-                          <SelectItem value="Lớp 12">Lớp 12</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  key="capHoc"
+                  render={renderCapHocField}
                 />
 
                 <FormField
                   control={form.control}
                   name="namHoc"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Năm học</FormLabel>
-                      <FormControl>
-                        <Input placeholder="2024-2025" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  key="namHoc"
+                  render={renderNamHocField}
                 />
               </div>
 
               <FormField
                 control={form.control}
                 name="maGiaoVienChuNhiem"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Giáo viên chủ nhiệm</FormLabel>
-                    <Select 
-                      onValueChange={(value) => field.onChange(value === "none" ? undefined : parseInt(value))}
-                      value={field.value ? String(field.value) : "none"}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Chọn giáo viên chủ nhiệm" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="none">Chưa chọn</SelectItem>
-                        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                        {teachers.map((teacher: any) => (
-                          <SelectItem key={teacher.maNguoiDung} value={String(teacher.maNguoiDung)}>
-                            {teacher.hoTen} ({teacher.email})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                key="maGiaoVienChuNhiem"
+                render={renderGiaoVienField}
               />
 
               <FormField
                 control={form.control}
                 name="moTa"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Mô tả</FormLabel>
-                    <FormControl>
-                      <Textarea 
-                        placeholder="Nhập mô tả về lớp học..."
-                        className="resize-none"
-                        rows={4}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+                key="moTa"
+                render={renderMoTaField}
               />
 
               <div className="flex justify-end gap-4">

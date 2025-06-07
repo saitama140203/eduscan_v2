@@ -1,4 +1,4 @@
-import { apiRequest } from "./base"
+import { apiRequest, ApiError } from "./base"
 
 export const authApi = {
   login: async (email: string, password: string) => {
@@ -30,14 +30,26 @@ export const authApi = {
         role: userData.vaiTro.toLowerCase(),
         organizationId: userData.maToChuc ? userData.maToChuc.toString() : undefined,
       }
-    } catch {
-      return null
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        // Lỗi xác thực, trả về null
+        return null
+      }
+      // Các lỗi khác, throw để xử lý ở cấp cao hơn
+      throw error
     }
   },
   getCurrentUser: async () => {
     return authApi.getUser()
   },
   logout: async () => {
-    await apiRequest("/auth/logout", { method: "POST" })
+    try {
+      await apiRequest("/auth/logout", { method: "POST" })
+      return true
+    } catch (error) {
+      console.error("Logout error:", error)
+      // Vẫn trả về true ngay cả khi có lỗi để cho phép logout client
+      return true
+    }
   },
 }

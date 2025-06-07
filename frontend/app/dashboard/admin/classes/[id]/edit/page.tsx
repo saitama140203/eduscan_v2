@@ -24,6 +24,7 @@ import { ArrowLeft, Edit, Save, Users } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { User } from "@/lib/api/users";
 
 const formSchema = z.object({
   tenLop: z.string().min(1, "Tên lớp học là bắt buộc"),
@@ -146,6 +147,16 @@ export default function AdminEditClassPage() {
                 {classData.trangThai ? 'Hoạt động' : 'Không hoạt động'}
               </span>
             </div>
+            <div>
+              <span className="text-blue-600 font-medium">Cấp học:</span>
+              <span className="ml-2 text-blue-900">{classData.capHoc || 'N/A'}</span>
+            </div>
+            <div>
+              <span className="text-blue-600 font-medium">Giáo viên chủ nhiệm:</span>
+              <span className="ml-2 text-blue-900">
+                {teachers.find((t: User) => t.maNguoiDung === classData.maGiaoVienChuNhiem)?.hoTen || 'Chưa phân công'}
+              </span>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -182,28 +193,27 @@ export default function AdminEditClassPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Cấp học</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Chọn cấp học" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="">Không xác định</SelectItem>
-                          <SelectItem value="Lớp 1">Lớp 1</SelectItem>
-                          <SelectItem value="Lớp 2">Lớp 2</SelectItem>
-                          <SelectItem value="Lớp 3">Lớp 3</SelectItem>
-                          <SelectItem value="Lớp 4">Lớp 4</SelectItem>
-                          <SelectItem value="Lớp 5">Lớp 5</SelectItem>
-                          <SelectItem value="Lớp 6">Lớp 6</SelectItem>
-                          <SelectItem value="Lớp 7">Lớp 7</SelectItem>
-                          <SelectItem value="Lớp 8">Lớp 8</SelectItem>
-                          <SelectItem value="Lớp 9">Lớp 9</SelectItem>
-                          <SelectItem value="Lớp 10">Lớp 10</SelectItem>
-                          <SelectItem value="Lớp 11">Lớp 11</SelectItem>
-                          <SelectItem value="Lớp 12">Lớp 12</SelectItem>
+                          <SelectItem value="THPT">THPT</SelectItem>
+                          <SelectItem value="THCS">THCS</SelectItem>
+                          <SelectItem value="TIEU_HOC">Tiểu học</SelectItem>
+                          <SelectItem value="TRUONG_DAI_HOC">Đại học</SelectItem>
                         </SelectContent>
                       </Select>
+                      {classData.capHoc && !["THPT", "THCS", "TIEU_HOC", "TRUONG_DAI_HOC"].includes(classData.capHoc) && (
+                        <p className="text-sm text-red-500 mt-1">
+                          Lưu ý: Cấp học hiện tại "{classData.capHoc}" không nằm trong các lựa chọn hợp lệ. Vui lòng chọn lại.
+                        </p>
+                      )}
                       <FormMessage />
                     </FormItem>
                   )}
@@ -244,7 +254,7 @@ export default function AdminEditClassPage() {
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="none">Chưa chọn</SelectItem>
-                        {teachers.map((teacher) => (
+                        {teachers.map((teacher: User) => (
                           <SelectItem key={teacher.maNguoiDung} value={String(teacher.maNguoiDung)}>
                             {teacher.hoTen} ({teacher.email})
                           </SelectItem>

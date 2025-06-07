@@ -25,11 +25,12 @@ class ClassUpdate(BaseModel):
 class ClassOut(ClassBase):
     maLopHoc: int
     trangThai: bool
-    thoiGianTao: datetime
-    thoiGianCapNhat: datetime
+    thoiGianTao: Optional[datetime] = None
+    thoiGianCapNhat: Optional[datetime] = None
     tenGiaoVienChuNhiem: Optional[str] = None
     tenToChuc: Optional[str] = None
     total_students: Optional[int] = None
+    total_exams: Optional[int] = None
     
     class Config:
         from_attributes = True
@@ -37,6 +38,9 @@ class ClassOut(ClassBase):
 class ClassDetail(ClassOut):
     tenToChuc: Optional[str] = None
     total_students: Optional[int] = None
+    total_exams: Optional[int] = None
+    average_score: Optional[float] = None
+    
     class Config:
         from_attributes = True
 
@@ -68,8 +72,8 @@ class StudentUpdate(BaseModel):
 class StudentOut(StudentBase):
     maHocSinh: int
     trangThai: bool
-    thoiGianTao: datetime
-    thoiGianCapNhat: datetime
+    thoiGianTao: Optional[datetime] = None
+    thoiGianCapNhat: Optional[datetime] = None
     
     class Config:
         from_attributes = True
@@ -82,4 +86,44 @@ class StudentTransfer(BaseModel):
     def validate_student_list(cls, v):
         if not v or len(v) == 0:
             raise ValueError('Danh sách học sinh không được trống')
-        return v 
+        return v
+
+# --- BULK OPERATIONS SCHEMAS ---
+class BulkOperationRequest(BaseModel):
+    operation: str = Field(..., pattern="^(delete|update_teacher|update_status|move_organization)$")
+    class_ids: List[int] = Field(..., min_items=1)
+    data: Optional[dict] = None
+
+class BulkOperationResponse(BaseModel):
+    updated_count: int
+    message: str
+
+# --- IMPORT/EXPORT SCHEMAS ---
+class ImportResult(BaseModel):
+    created_count: int
+    error_count: int
+    errors: List[str]
+
+class ClassTemplate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    settings: dict
+
+# --- ANALYTICS SCHEMAS ---
+class ClassAnalyticsResponse(BaseModel):
+    total_classes: int
+    active_classes: int
+    total_students: int
+    avg_students_per_class: float
+    grade_distribution: dict
+    activity_rate: float
+
+class DashboardStats(BaseModel):
+    total_classes: int
+    active_classes: int
+    total_students: int
+    monthly_classes: int
+    grade_distribution: dict
+    recent_activity: int
+    activity_rate: float
+    avg_students_per_class: float 

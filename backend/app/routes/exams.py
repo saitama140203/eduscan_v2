@@ -84,3 +84,111 @@ async def delete_exam(
         return status.HTTP_403_FORBIDDEN
     await ExamService.delete_exam(db, exam_id)
     return {"message": "deleted"}
+
+
+# ========== NEW ENDPOINTS ==========
+
+@router.post("/{exam_id}/assign-classes")
+async def assign_exam_to_classes(
+    exam_id: int,
+    class_ids: List[int],
+    current_user: User = Depends(check_manager_permission),
+    db: AsyncSession = Depends(get_db),
+):
+    """Gán bài kiểm tra cho các lớp học"""
+    exam = await ExamService.get_exam(db, exam_id)
+    if current_user.vaiTro == "MANAGER" and exam.maToChuc != current_user.maToChuc:
+        return status.HTTP_403_FORBIDDEN
+    if current_user.vaiTro == "TEACHER" and exam.maNguoiTao != current_user.maNguoiDung:
+        return status.HTTP_403_FORBIDDEN
+    
+    result = await ExamService.assign_to_classes(db, exam_id, class_ids)
+    return {"message": "Exam assigned to classes successfully", "assigned_classes": result}
+
+
+@router.get("/{exam_id}/classes")
+async def get_exam_classes(
+    exam_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Lấy danh sách lớp đã được gán bài kiểm tra"""
+    exam = await ExamService.get_exam(db, exam_id)
+    if current_user.vaiTro == "MANAGER" and exam.maToChuc != current_user.maToChuc:
+        return status.HTTP_403_FORBIDDEN
+    if current_user.vaiTro == "TEACHER" and exam.maNguoiTao != current_user.maNguoiDung:
+        return status.HTTP_403_FORBIDDEN
+    
+    classes = await ExamService.get_assigned_classes(db, exam_id)
+    return classes
+
+
+@router.post("/{exam_id}/answers")
+async def create_exam_answers(
+    exam_id: int,
+    answers_data: dict,
+    current_user: User = Depends(check_manager_permission),
+    db: AsyncSession = Depends(get_db),
+):
+    """Tạo/cập nhật đáp án cho bài kiểm tra"""
+    exam = await ExamService.get_exam(db, exam_id)
+    if current_user.vaiTro == "MANAGER" and exam.maToChuc != current_user.maToChuc:
+        return status.HTTP_403_FORBIDDEN
+    if current_user.vaiTro == "TEACHER" and exam.maNguoiTao != current_user.maNguoiDung:
+        return status.HTTP_403_FORBIDDEN
+    
+    answers = await ExamService.create_or_update_answers(db, exam_id, answers_data)
+    return answers
+
+
+@router.get("/{exam_id}/answers")
+async def get_exam_answers(
+    exam_id: int,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Lấy đáp án của bài kiểm tra"""
+    exam = await ExamService.get_exam(db, exam_id)
+    if current_user.vaiTro == "MANAGER" and exam.maToChuc != current_user.maToChuc:
+        return status.HTTP_403_FORBIDDEN
+    if current_user.vaiTro == "TEACHER" and exam.maNguoiTao != current_user.maNguoiDung:
+        return status.HTTP_403_FORBIDDEN
+    
+    answers = await ExamService.get_exam_answers(db, exam_id)
+    return answers
+
+
+@router.get("/{exam_id}/statistics")
+async def get_exam_statistics(
+    exam_id: int,
+    class_id: Optional[int] = None,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Lấy thống kê kết quả bài kiểm tra"""
+    exam = await ExamService.get_exam(db, exam_id)
+    if current_user.vaiTro == "MANAGER" and exam.maToChuc != current_user.maToChuc:
+        return status.HTTP_403_FORBIDDEN
+    if current_user.vaiTro == "TEACHER" and exam.maNguoiTao != current_user.maNguoiDung:
+        return status.HTTP_403_FORBIDDEN
+    
+    stats = await ExamService.get_exam_statistics(db, exam_id, class_id)
+    return stats
+
+
+@router.get("/{exam_id}/results")
+async def get_exam_results(
+    exam_id: int,
+    class_id: Optional[int] = None,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Lấy kết quả chi tiết của bài kiểm tra"""
+    exam = await ExamService.get_exam(db, exam_id)
+    if current_user.vaiTro == "MANAGER" and exam.maToChuc != current_user.maToChuc:
+        return status.HTTP_403_FORBIDDEN
+    if current_user.vaiTro == "TEACHER" and exam.maNguoiTao != current_user.maNguoiDung:
+        return status.HTTP_403_FORBIDDEN
+    
+    results = await ExamService.get_exam_results(db, exam_id, class_id)
+    return results

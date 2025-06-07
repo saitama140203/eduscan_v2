@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, memo, useMemo, useEffect } from "react"
+import { useMemo, useCallback, memo } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -8,31 +8,25 @@ import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useAuth } from "@/hooks/useAuth"
 import {
-  ChevronLeft,
-  ChevronRight,
   MenuIcon,
+  LayoutDashboard,
   BookOpen,
   Users,
   UserSquare,
-  LayoutDashboard,
   Building,
-  Pencil,
-  LogOut,
-  Settings,
-  UserCog,
-  BookType,
   FileSpreadsheet,
-  GraduationCap,
-  Scan,
-  School,
   FileCheck,
-  TrendingUp,
+  Settings,
   BarChart3,
+  TrendingUp,
+  Scan,
   PanelLeftClose,
   PanelLeftOpen,
+  LogOut,
+  PencilRuler,
+  UserCog,
 } from "lucide-react"
 
-// Thêm description vào interface của link
 interface SidebarLink {
   label: string;
   href: string;
@@ -41,7 +35,6 @@ interface SidebarLink {
   description?: string;
 }
 
-// Memoize NavLink component để tránh render lại không cần thiết
 const NavLink = memo(({ 
   href, 
   isActive, 
@@ -96,36 +89,16 @@ export function Sidebar({
   const pathname = usePathname()
   const { user, logout } = useAuth()
 
-  // Memoize links để tránh tính toán lại không cần thiết
+  // Các menu tối ưu hóa theo vai trò
   const links = useMemo(() => {
     const allLinks: SidebarLink[] = [
+      // --- Super Admin ---
       {
         label: "Trang chủ",
-        href: "/dashboard",
+        href: "/",
         icon: LayoutDashboard,
         access: ["admin", "manager", "teacher"],
         description: "Tổng quan hệ thống"
-      },
-      {
-        label: "Quản lý lớp học",
-        href: "/dashboard/admin/classes",
-        icon: BookOpen,
-        access: ["admin"],
-        description: "Quản lý thông tin các lớp học"
-      },
-      {
-        label: "Quản lý học sinh",
-        href: "/dashboard/admin/students",
-        icon: UserSquare,
-        access: ["admin"],
-        description: "Quản lý thông tin học sinh"
-      },
-      {
-        label: "Quản lý giáo viên",
-        href: "/dashboard/admin/users",
-        icon: Users,
-        access: ["admin"],
-        description: "Quản lý thông tin giáo viên và nhân viên"
       },
       {
         label: "Quản lý tổ chức",
@@ -135,34 +108,49 @@ export function Sidebar({
         description: "Quản lý thông tin trường học, tổ chức"
       },
       {
+        label: "Quản lý lớp học",
+        href: "/dashboard/admin/classes",
+        icon: BookOpen,
+        access: ["admin"],
+        description: "Quản lý các lớp học trong hệ thống"
+      },
+      {
+        label: "Quản lý người dùng",
+        href: "/dashboard/admin/users",
+        icon: UserCog,
+        access: ["admin"],
+        description: "Quản lý danh sách giáo viên"
+      },
+      {
         label: "Quản lý đề thi",
         href: "/dashboard/admin/exams",
         icon: FileSpreadsheet,
-        access: ["admin", "manager", "teacher"],
-        description: "Quản lý thông tin đề thi"
+        access: ["admin"],
+        description: "Quản lý đề thi toàn hệ thống"
       },
       {
         label: "Mẫu đáp án",
         href: "/dashboard/admin/answer-templates",
         icon: FileCheck,
         access: ["admin"],
-        description: "Cấu hình mẫu đáp án"
+        description: "Cấu hình mẫu đáp án toàn hệ thống"
       },
       {
         label: "Cài đặt hệ thống",
         href: "/dashboard/admin/system-settings",
         icon: Settings,
         access: ["admin"],
-        description: "Cấu hình hệ thống"
+        description: "Cấu hình, tuỳ chỉnh hệ thống"
       },
       {
         label: "Phân tích hệ thống",
         href: "/dashboard/admin/system-analytics",
         icon: BarChart3,
         access: ["admin"],
-        description: "Phân tích dữ liệu"
+        description: "Thống kê, phân tích dữ liệu tổng thể"
       },
-      // Manager links
+
+      // --- Manager ---
       {
         label: "Lớp học",
         href: "/dashboard/manager/classes",
@@ -178,80 +166,72 @@ export function Sidebar({
         description: "Quản lý giáo viên trong tổ chức"
       },
       {
-        label: "Học sinh",
-        href: "/dashboard/manager/students",
-        icon: UserSquare,
-        access: ["manager"],
-        description: "Quản lý học sinh trong tổ chức"
-      },
-      {
         label: "Đề thi",
         href: "/dashboard/manager/exams",
         icon: FileSpreadsheet,
         access: ["manager"],
-        description: "Quản lý đề thi trong tổ chức"
+        description: "Quản lý đề thi tổ chức"
       },
       {
         label: "Thống kê",
         href: "/dashboard/manager/statistics",
         icon: TrendingUp,
         access: ["manager"],
-        description: "Xem báo cáo thống kê"
+        description: "Xem báo cáo, thống kê tổ chức"
       },
-      // Teacher links
+
+      // --- Teacher ---
       {
         label: "Lớp học của tôi",
         href: "/dashboard/teacher/classes",
         icon: BookOpen,
         access: ["teacher"],
-        description: "Quản lý lớp học được phân công"
-      },
-      {
-        label: "Học sinh",
-        href: "/dashboard/teacher/students",
-        icon: UserSquare,
-        access: ["teacher"],
-        description: "Xem thông tin học sinh"
+        description: "Lớp học được phân công"
       },
       {
         label: "Đề thi",
         href: "/dashboard/teacher/exams",
         icon: FileSpreadsheet,
         access: ["teacher"],
-        description: "Quản lý đề thi"
+        description: "Quản lý đề thi cá nhân"
+      },
+      {
+        label: "Chấm bài OMR",
+        href: "/dashboard/teacher/omr",
+        icon: PencilRuler,
+        access: ["teacher"],
+        description: "Upload và chấm bài OMR"
       },
       {
         label: "Thống kê",
         href: "/dashboard/teacher/statistics",
         icon: TrendingUp,
         access: ["teacher"],
-        description: "Xem báo cáo thống kê"
+        description: "Xem báo cáo, thống kê kết quả chấm"
       },
     ]
-    
-    // Lọc links dựa trên quyền của user
-    return allLinks.filter(link => 
+    // Lọc menu theo quyền
+    return allLinks.filter(link =>
       user?.role && link.access.includes(user.role)
     )
   }, [user?.role])
-  
-  // Phân tách logout để tránh re-render
+
   const handleLogout = useCallback(async () => {
     await logout()
   }, [logout])
 
   return (
     <>
-      {/* Overlay for mobile sidebar */}
+      {/* Overlay for mobile */}
       {isSidebarOpen && (
         <div 
           className="fixed inset-0 z-20 bg-black/50 md:hidden" 
-          onClick={() => closeSidebar()}
+          onClick={closeSidebar}
           aria-hidden="true"
         />
       )}
 
-      {/* Mobile Menu Button - Hiển thị ở mobile */}
+      {/* Mobile menu button */}
       <Button
         variant="outline"
         size="icon"
@@ -268,9 +248,9 @@ export function Sidebar({
           isSidebarOpen ? "w-64 translate-x-0" : "w-16 -translate-x-full md:translate-x-0"
         )}
       >
-        {/* Sidebar Header */}
+        {/* Sidebar header */}
         <div className="flex h-14 items-center border-b px-4">
-          <Link href="/dashboard" className="flex items-center gap-2 overflow-hidden">
+          <Link href="/dashboard/admin" className="flex items-center gap-2 overflow-hidden">
             <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary">
               <Scan className="h-5 w-5 text-primary-foreground" />
             </div>

@@ -69,7 +69,7 @@ export default function LoginPage() {
       if (user.role === "admin") router.replace("/dashboard/admin")
       else if (user.role === "manager") router.replace("/dashboard/manager")
       else if (user.role === "teacher") router.replace("/dashboard/teacher")
-      else router.replace("/dashboard")
+      else router.replace("/auth/login")
     }
   }, [user, isAuthLoading, router, mounted])
 

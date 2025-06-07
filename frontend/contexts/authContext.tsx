@@ -5,6 +5,7 @@ import { createContext, useState, useEffect } from "react"
 import { debugLog } from "@/lib/utils/debug"
 import { authApi } from "@/lib/api/auth"
 import { usePathname, useRouter } from "next/navigation"
+import { ApiError } from "@/lib/api/base"
 
 export type User = {
   id: string
@@ -176,18 +177,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error("[AuthProvider] Login failed:", error);
       setUser(null); // Đảm bảo user là null khi login fail
       saveUserToCache(null);
+      
+      // Xử lý lỗi mạng từ ApiError
+      if (error instanceof ApiError) {
+        return {
+          success: false,
+          message: error.message,
+          isNetworkError: error.isNetworkError,
+          status: error.status,
+        }
+      }
+      
+      // Xử lý lỗi TypeError (failed to fetch)
       if (error instanceof TypeError && error.message.includes("fetch")) {
         return {
           success: false,
-          message: "Network error: Unable to connect to the API server. Please check your connection and try again.",
+          message: "Không thể kết nối đến máy chủ. Vui lòng kiểm tra kết nối internet của bạn và thử lại sau.",
           isNetworkError: true,
         }
       }
+      
       // Log chi tiết error response nếu có
       console.error("[AuthProvider] Detailed error:", error.response?.data || error.message);
       return {
         success: false,
-        message: error.response?.data?.detail || error.message || "Invalid credentials",
+        message: error.response?.data?.detail || error.message || "Thông tin đăng nhập không hợp lệ",
         isNetworkError: false,
       }
     }

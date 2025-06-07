@@ -1,6 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, Form,File
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
+import io
+from fastapi.responses import StreamingResponse
 
 from app.db.database import get_db
 from app.services.student_service import StudentService
@@ -119,24 +121,16 @@ async def update_student(
 @router.delete("/{student_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_student(
     student_id: int,
+    current_user: User = Depends(check_manager_permission),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_active_user)
 ):
-    """Xóa học sinh"""
-    # Lấy thông tin học sinh
-    db_student = await StudentService.get_student_by_id(db, student_id)
-    if not db_student:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Không tìm thấy học sinh với ID: {student_id}"
-        )
-    
-    # Kiểm tra quyền truy cập lớp học của học sinh
-    await check_class_access(db_student.maLopHoc, current_user, db)
-    
-    # Xóa học sinh
+    student = await StudentService.get_student_by_id(db, student_id)
+    if current_user.vaiTro == "MANAGER" and student.lop_hoc.maToChuc != current_user.maToChuc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Không có quyền truy cập")
+    if current_user.vaiTro == "TEACHER" and student.lop_hoc.maGiaoVienChuNhiem != current_user.maNguoiDung:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Không có quyền truy cập")
     await StudentService.delete_student(db, student_id)
-    return {"message": "Học sinh đã được xóa thành công"}
+    return {"message": "deleted"}
 
 @router.post("/transfer", response_model=List[StudentOut])
 async def transfer_students(
@@ -192,4 +186,132 @@ async def transfer_students(
         )
     
     # Thực hiện chuyển lớp
-    return await StudentService.transfer_students(db, transfer_data) 
+    return await StudentService.transfer_students(db, transfer_data)
+
+# ========== NEW IMPORT/EXPORT ENDPOINTS ==========
+
+@router.post("/import-excel")
+async def import_students_from_excel(
+    file: UploadFile = File(...),
+    class_id: int = Form(...),
+    current_user: User = Depends(check_manager_permission),
+    db: AsyncSession = Depends(get_db),
+):
+    """Import danh sách học sinh từ file Excel"""
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File phải có định dạng Excel (.xlsx hoặc .xls)"
+        )
+    
+    try:
+        # Kiểm tra quyền truy cập lớp học
+        class_obj = await ClassService.get_class(db, class_id)
+        if current_user.vaiTro == "MANAGER" and class_obj.maToChuc != current_user.maToChuc:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Không có quyền truy cập")
+        if current_user.vaiTro == "TEACHER" and class_obj.maGiaoVienChuNhiem != current_user.maNguoiDung:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Không có quyền truy cập")
+        
+        # Đọc và xử lý file Excel
+        result = await StudentService.import_from_excel(db, file, class_id)
+        
+        return {
+            "message": "Import thành công",
+            "total_processed": result["total_processed"],
+            "successful": result["successful"],
+            "failed": result["failed"],
+            "errors": result["errors"]
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Lỗi khi import file: {str(e)}"
+        )
+
+@router.get("/export-excel")
+async def export_students_to_excel(
+    class_id: Optional[int] = None,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Export danh sách học sinh ra file Excel"""
+    try:
+        # Lấy danh sách học sinh theo quyền
+        if current_user.vaiTro == "ADMIN":
+            students = await StudentService.get_list(db, maLopHoc=class_id)
+        elif current_user.vaiTro == "MANAGER":
+            students = await StudentService.get_list(db, maLopHoc=class_id, maToChuc=current_user.maToChuc)
+        else:  # TEACHER
+            if class_id:
+                class_obj = await ClassService.get_class(db, class_id)
+                if class_obj.maGiaoVienChuNhiem != current_user.maNguoiDung:
+                    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Không có quyền truy cập")
+            students = await StudentService.get_list_by_teacher(db, current_user.maNguoiDung, class_id)
+        
+        # Tạo file Excel
+        excel_file = await StudentService.export_to_excel(students)
+        
+        return StreamingResponse(
+            io.BytesIO(excel_file),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": "attachment; filename=danh_sach_hoc_sinh.xlsx"}
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Lỗi khi export file: {str(e)}"
+        )
+
+@router.get("/template-excel")
+async def download_import_template():
+    """Tải template Excel để import học sinh"""
+    try:
+        template_file = await StudentService.create_import_template()
+        
+        return StreamingResponse(
+            io.BytesIO(template_file),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": "attachment; filename=template_import_hoc_sinh.xlsx"}
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Lỗi khi tạo template: {str(e)}"
+        )
+
+@router.post("/bulk-operations")
+async def bulk_student_operations(
+    operation: str = Form(...),  # "delete", "move_class", "update_status"
+    student_ids: List[int] = Form(...),
+    target_class_id: Optional[int] = Form(None),
+    new_status: Optional[bool] = Form(None),
+    current_user: User = Depends(check_manager_permission),
+    db: AsyncSession = Depends(get_db),
+):
+    """Thực hiện các thao tác hàng loạt với học sinh"""
+    try:
+        result = await StudentService.bulk_operations(
+            db, 
+            operation, 
+            student_ids, 
+            current_user,
+            target_class_id=target_class_id,
+            new_status=new_status
+        )
+        
+        return {
+            "message": f"Thực hiện {operation} thành công",
+            "processed": result["processed"],
+            "successful": result["successful"],
+            "failed": result["failed"],
+            "errors": result.get("errors", [])
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Lỗi khi thực hiện thao tác: {str(e)}"
+        ) 

@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import jwt, JWTError
-from fastapi import Request, Depends, HTTPException, status
+from fastapi import Request, Depends, HTTPException, status, WebSocket
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import ValidationError
 from passlib.context import CryptContext
@@ -59,6 +59,37 @@ async def get_current_user(request: Request, db: AsyncSession = Depends(get_db))
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tài khoản đã bị vô hiệu hóa")
     return user
 
+async def get_current_user_websocket(websocket: WebSocket, token: str, db: AsyncSession) -> Optional[User]:
+    """
+    Xác thực người dùng cho WebSocket connection
+    """
+    if not token:
+        return None
+    
+    try:
+        payload = verify_token(token)
+        token_data = TokenData(
+            email=payload.get("sub"),
+            user_id=payload.get("user_id"),
+            roles=payload.get("roles", []),
+        )
+        if not token_data.email:
+            return None
+    except (JWTError, ValidationError):
+        return None
+    
+    user = None
+    if token_data.user_id:
+        user = await db.get(User, token_data.user_id)
+    if not user and token_data.email:
+        result = await db.execute(select(User).where(User.email == token_data.email))
+        user = result.scalars().first()
+    
+    if not user or not user.trangThai:
+        return None
+    
+    return user
+
 async def get_current_active_user(current_user: User = Depends(get_current_user)) -> User:
     if not current_user.trangThai:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Tài khoản đã bị vô hiệu hóa")
@@ -78,11 +109,6 @@ def check_teacher_permission(current_user: User = Depends(get_current_active_use
     if str(current_user.vaiTro).upper() not in ["ADMIN", "MANAGER", "TEACHER"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bạn không có quyền Teacher trở lên.")
     return current_user
-
-
-
-
-
 
 async def check_class_access(
     class_id: int,

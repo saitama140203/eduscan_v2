@@ -1,12 +1,8 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
-// import { jwtVerify } from "jose" - sẽ không sử dụng
-
-// JWT_SECRET không cần thiết cho giải pháp tạm thời
-// const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || "your-secret-key")
 
 // Protected routes configuration
-const protectedRoutes = ["/dashboard"]
+const dashboardRoutes = ["/dashboard"]
 const authRoutes = ["/auth/login", "/auth/register"]
 const roleBasedRoutes = {
   admin: ["/dashboard/admin"],
@@ -26,30 +22,21 @@ export async function middleware(request: NextRequest) {
   response.headers.set("X-Content-Type-Options", "nosniff")
   response.headers.set("Referrer-Policy", "origin-when-cross-origin")
 
-  // Check if route is protected
-  const isProtectedRoute = protectedRoutes.some((route) => pathname.startsWith(route))
-  const isAuthRoute = authRoutes.some((route) => pathname.startsWith(route))
+  // Kiểm tra nếu là route xác thực
+  const isAuthRoute = authRoutes.some((route) => pathname === route)
+  // Kiểm tra nếu là route dashboard
+  const isDashboardRoute = dashboardRoutes.some((route) => pathname.startsWith(route)) ||
+    Object.values(roleBasedRoutes).flat().some((route) => pathname.startsWith(route))
 
-  // Redirect authenticated users away from auth pages
+  // Nếu đang ở trang auth và đã có token, chuyển hướng đến dashboard
   if (isAuthRoute && token) {
-    // Giải pháp tạm thời: Bỏ qua xác minh token, chỉ kiểm tra xem token có tồn tại hay không
-    // Chuyển hướng đến dashboard admin mặc định
-    return NextResponse.redirect(new URL("/dashboard/admin", request.url))
+    // Không chuyển hướng tự động, để client xử lý
+    return response
   }
 
-  // Handle protected routes
-  if (isProtectedRoute) {
-    if (!token) {
-      const loginUrl = new URL("/auth/login", request.url)
-      loginUrl.searchParams.set("callbackUrl", pathname)
-      return NextResponse.redirect(loginUrl)
-    }
-
-    // Giải pháp tạm thời: Không xác minh token, chỉ kiểm tra xem token có tồn tại hay không
-    // Nếu token tồn tại, cho phép truy cập tất cả các route được bảo vệ
-    // Bỏ qua kiểm tra vai trò
-    
-    return response
+  // Nếu đang ở trang dashboard và không có token, chuyển hướng đến login
+  if (isDashboardRoute && !token) {
+    return NextResponse.redirect(new URL("/auth/login", request.url))
   }
 
   return response

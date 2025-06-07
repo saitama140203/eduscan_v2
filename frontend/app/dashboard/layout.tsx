@@ -15,6 +15,7 @@ function useSidebarState() {
 
   // Hydrate from localStorage after component mounts
   useEffect(() => {
+    // Đảm bảo đoạn mã này chỉ chạy ở client
     const savedState = localStorage.getItem('sidebar_open')
     const defaultOpen = window.innerWidth >= 768 // Desktop mặc định mở
     const initialState = savedState ? savedState === 'true' : defaultOpen
@@ -91,17 +92,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     )
   }, [isSidebarOpen])
 
-  // Memoize container styles
-  const containerStyles = useMemo(() => ({
-    height: '100vh',
-    overflow: 'hidden'
-  }), [])
+  // Memoize container styles - Sử dụng className thay vì inline style
+  const containerClassName = "flex h-[100vh] overflow-hidden";
 
   // Show loading state until hydrated to prevent layout shift
   if (!isHydrated) {
     return (
       <AuthGuard>
-        <div className="flex" style={containerStyles}>
+        <div className={containerClassName}>
           {/* Skeleton sidebar */}
           <aside className="fixed inset-y-0 left-0 z-30 w-16 border-r bg-background">
             <div className="flex h-16 items-center border-b px-4">
@@ -124,7 +122,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   return (
     <AuthGuard>
-      <div className="flex" style={containerStyles}>
+      <div className={containerClassName}>
         <Sidebar
           isSidebarOpen={isSidebarOpen}
           toggleSidebar={toggleSidebar}

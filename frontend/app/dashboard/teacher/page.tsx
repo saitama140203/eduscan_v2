@@ -2,16 +2,39 @@ import { Stats } from "@/components/dashboard/Stats"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { BarChart, LineChart, PieChart } from "lucide-react"
+import { BarChart, LineChart, PieChart, FileText, Camera, BarChart3, Activity } from "lucide-react"
 
 export default function TeacherDashboardPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Teacher Dashboard</h1>
-        <Button asChild>
-          <Link href="/dashboard/teacher/scan">Scan Answer Sheet</Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button asChild variant="outline">
+            <Link href="/dashboard/teacher/enhanced">
+              <BarChart3 className="h-4 w-4 mr-2" />
+              Enhanced Dashboard
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/dashboard/teacher/analytics">
+              <BarChart3 className="h-4 w-4 mr-2" />
+              Analytics Dashboard
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/dashboard/teacher/exams">
+              <FileText className="h-4 w-4 mr-2" />
+              Quản lý Bài kiểm tra
+            </Link>
+          </Button>
+          <Button asChild>
+            <Link href="/dashboard/teacher/scan">
+              <Camera className="h-4 w-4 mr-2" />
+              Scan Answer Sheet
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <Stats />
@@ -63,7 +86,7 @@ export default function TeacherDashboardPage() {
                     <p className="text-sm text-muted-foreground">Scheduled for {new Date().toLocaleDateString()}</p>
                   </div>
                   <Button variant="outline" size="sm" asChild>
-                    <Link href={`/dashboard/teacher/classes/1/exams/${i}`}>View</Link>
+                    <Link href={`/dashboard/teacher/exams/${i}`}>View</Link>
                   </Button>
                 </div>
               ))}
